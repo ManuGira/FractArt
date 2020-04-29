@@ -18,15 +18,15 @@ def juliaset(center_xy, dim_xy, zoom):
     julia_hits = np.zeros(shape=(height, width), dtype=np.uint8)
 
     tic = time.time()
-    for i in range(height):
-        for j in range(width):
-            z = mgz[i, j]
-            count = 0
-            while abs(z) < 10 and count < 255:
-                z = z**2 + c
-                count += 1
-            hits[i, j] = count
+    mask = abs(mgz) < 10
+    for k in range(255):
+        print(k)
+        mgz[mask] = mgz[mask]**2 + c
+        mask = abs(mgz) < 10
+        hits[mask] = hits[mask] + 1
     print(time.time()-tic)
+
+    
     cv.imshow("julia", hits)
     key = cv.waitKey(0)
 
