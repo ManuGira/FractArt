@@ -3,17 +3,20 @@ import cv2 as cv
 import time
 import os
 
-def export_to_png(filename, data):
+
+def export_to_png(name, data):
     folder = "gallery"
     if not os.path.exists(folder):
         os.mkdir(folder)
-    file = os.path.join(folder, f"{filename}.png")
+    file = os.path.join(folder, f"{name}.png")
     cv.imwrite(file, data)
+
 
 def juliaset(center_xy, dim_xy, zoom):
     cx, cy = center_xy
     width, height = dim_xy
     ratio = 2/max(width, height)/zoom
+    print(f"{width}x{height} = {width*height} pixels")
 
     range_x = cx + np.linspace(-width/2, width/2, width)*ratio
     range_y = cy + np.linspace(-height/2, height/2, height)*ratio
@@ -26,20 +29,14 @@ def juliaset(center_xy, dim_xy, zoom):
     tic = time.time()
     mask = abs(mgz) < 10
     for k in range(255):
-        print(f"{100*k/255: 3.2f}%")
+        print(f"{100*k/255: 5.2f}%")
         mgz[mask] = mgz[mask]**2 + c
         mask = abs(mgz) < 10
         julia_hits[mask] = julia_hits[mask] + 1
 
-        cv.imshow("julia", julia_hits)
-        key = cv.waitKey(1)
-    print(time.time()-tic)
-
-    cv.imshow("julia", julia_hits)
-    key = cv.waitKey(0)
-
+    print(f"elapsed time: {time.time()-tic:.3f}s")
     export_to_png("julia", julia_hits)
 
 
 if __name__ == '__main__':
-    juliaset((0,0),(200,160), 0.75)
+    juliaset((0,0),(708, 472), 0.5)
