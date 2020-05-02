@@ -2,14 +2,7 @@ import numpy as np
 import cv2 as cv
 import time
 import os
-
-
-def export_to_png(name, data):
-    folder = "gallery"
-    if not os.path.exists(folder):
-        os.mkdir(folder)
-    file = os.path.join(folder, f"{name}.png")
-    cv.imwrite(file, data)
+import utils
 
 
 def juliaset(center_xy, dim_xy, zoom):
@@ -35,7 +28,7 @@ def juliaset(center_xy, dim_xy, zoom):
         julia_hits[mask] = julia_hits[mask] + 1
 
     print(f"elapsed time: {time.time()-tic:.3f}s")
-    export_to_png("julia", julia_hits)
+    utils.export_to_png("julia", julia_hits)
 
 
 if __name__ == '__main__':

@@ -1,71 +1,87 @@
 import cv2 as cv
+import numpy as np
+import utils
 
 
 class QuadTree:
-    def __init__(self, img, N, condition_function):
-        self.img = img
-        self.imgfb = img.copy()
+
+    def __init__(self, N, img, rectangle=None):
         self.N = N
+        self.img = img
+        # coordinates of the rectangle points in the original image
+        if rectangle is None:
+            # p0 and p1 in xy order [px0 py0] [px1 py1]
+            self.rectangle = [0, 0], [self.img.shape[1], self.img.shape[0]]
+        else:
+            self.rectangle = rectangle
 
-        self.dim = img.shape[0:2]
-        self.root = QuadTreeNode(0, 0, self.dim[0], self.dim[1])
-        self.cond_func = condition_function
-        self.stages = [[self.root]] + [[]]*self.N
-
-    def compute(self):
-        for n in range(self.N):
-            print(f"Stage {n}, {len(self.stages[n])} nodes")
-            nodes = self.stages[n] + []
-            for node in nodes:
-
-                node.compute_child_nodes(self.img, self.cond_func)
-                if len(node.childs) > 0:
-                    self.stages[n+1] += node.childs
-
-                    self.imgfb = cv.rectangle(self.imgfb, (node.left+2, node.top+2), (node.right-2, node.bottom-2), color=(255,))
-                    cv.imshow("OK", self.imgfb)
-                    cv.waitKey(1)
-        print(self.stages)
-
-class QuadTreeNode:
-
-    def __init__(self, top, left, bottom, right):
-        self.top = top
-        self.left = left
-        self.bottom = bottom
-        self.right = right
         self.childs = []
+        if N > 0 and self.cond_func():
+            self.compute_child_nodes()
 
-    def compute_child_nodes(self, img, condition_function):
-        midx = int(round(self.right+self.left)/2)
-        midy = int(round(self.bottom+self.top)/2)
+    def get_rectangles(self):
+        out = []
+        for child in self.childs:
+            out += child.get_rectangles()
+        if len(out) == 0:  # we are a leave
+            return [self.rectangle]
+        return out
 
-        child00 = QuadTreeNode(self.top, self.left, midy, midx)
-        child01 = QuadTreeNode(self.top, midx, midy, self.right)
-        child10 = QuadTreeNode(midy, self.left, self.bottom, midx)
-        child11 = QuadTreeNode(midy, midx, self.bottom, self.right)
-        for child in [child00, child01, child10, child11]:
-            if condition_function(img, child):
-                self.childs.append(child)
+    def get_Ns(self):
+        out = []
+        for child in self.childs:
+            out += child.get_Ns()
+        if len(out) == 0:  # we are a leave
+            return [self.N]
+        return out
 
-def condition_function(img, node):
-    subimg = img[node.top:node.bottom, node.left:node.right]
-    print("\t", node.top, node.left, node.bottom, node.right)
-    try:
-        subimg.max()
-    except:
-        print("oh non")
-    print("\t\t", subimg.max())
-    return subimg.max() > 25
+    def compute_child_nodes(self):
+        H, W = self.img.shape[0:2]
+        midH = int(round(H/2))
+        midW = int(round(W/2))
+        Nc = self.N-1
+
+        px0, py0 = self.rectangle[0][0], self.rectangle[0][1]
+        rect00 = [px0 +    0, py0 +    0], [px0 + midW, py0 + midH]
+        rect01 = [px0 + midW, py0 +    0], [px0 +    W, py0 + midH]
+        rect10 = [px0 +    0, py0 + midH], [px0 + midW, py0 +    H]
+        rect11 = [px0 + midW, py0 + midH], [px0 +    W, py0 +    H]
+
+        child00 = QuadTree(Nc, self.img[:midH, :midW], rect00)
+        child01 = QuadTree(Nc, self.img[:midH, midW:], rect01)
+        child10 = QuadTree(Nc, self.img[midH:, :midW], rect10)
+        child11 = QuadTree(Nc, self.img[midH:, midW:], rect11)
+        self.childs = [child00, child01, child10, child11]
+
+    def cond_func(self):
+        return self.img.max() > 100
+
 
 def main():
-    img = cv.imread("gallery/julia.png")
-    img = img[:, :, 0]
-    qt = QuadTree(img, 10, condition_function)
-    qt.compute()
-    print("ok")
+    img0 = cv.imread("gallery/bigjulia4.png")
+    img = img0[:, :, 0]
+    N = 12
+    root = QuadTree(N, img)
+    rects = root.get_rectangles()
+    Ns = root.get_Ns()
+    print(len(rects))
 
+    pts0 = lambda r: (r[0][0], r[0][1])
+    pts1 = lambda r: (r[1][0], r[0][1])
+    pts2 = lambda r: (r[1][0], r[1][1])
+    pts3 = lambda r: (r[0][0], r[1][1])
+    rects = [[pts0(r), pts1(r), pts2(r), pts3(r)] for r in rects]
+    rects = np.array(rects, np.int32)
 
+    img0 = np.zeros_like(img0)
+    for i in range(len(rects)):
+        color = int(255*((Ns[i])/(N-2))**0.5)
+        # cv.polylines(img0, [rect], True, (np.random.randint(0, 255), 255, 255))
+        img0 = cv.fillPoly(img0, [rects[i]], (color,color,color))
+
+    # cv.imshow("OK", img0)
+    # cv.waitKey(0)
+    utils.export_to_png("quad", img0)
 
 if __name__ == '__main__':
     main()
