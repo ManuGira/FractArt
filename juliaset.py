@@ -3,6 +3,7 @@ import time
 import utils
 from numba import jit
 
+
 @jit
 def meshgrid(range_x, range_y):
     # return np.meshgrid(range_x, range_y)
@@ -28,6 +29,7 @@ def zoom_space_to_cartesian(x, y, z, cx, cy):
     cart_y = (y-cy)/2**(z-1) + cy
     return cart_x, cart_y
 
+
 @jit
 def compute_julia_numba(mgx, mgy, c, max_iter=80):
     height, width = mgx.shape
@@ -50,6 +52,7 @@ def compute_julia_numba(mgx, mgy, c, max_iter=80):
             julia_hits[j, i] = hit
     return julia_hits
 
+
 def compute_julia(mgx, mgy, c, max_iter=80):
     height, width = mgx.shape
     cc = complex(c[0], c[1])
@@ -61,6 +64,7 @@ def compute_julia(mgx, mgy, c, max_iter=80):
         mask = abs(mgc) < 10
         julia_hits[mask] = julia_hits[mask] + 1
     return julia_hits
+
 
 @jit
 def generate_mesh(width, height, ratio, cx, cy, zoom):
@@ -76,14 +80,39 @@ def generate_mesh(width, height, ratio, cx, cy, zoom):
     return mgx, mgy
 
 @jit
-def super(width, height, ratio, cx, cy, zoom, constant_xy):
-    mgx, mgy = generate_mesh(width, height, ratio, cx, cy, zoom)
-    # print(time.time() - tic)
+def generate_mesh2(dim_xy, pos_xyz, r_mat):
+    W, H = dim_xy
+    ratio = max(W, H)
+    range_x = np.linspace(-W, W, W) / ratio
+    range_y = np.linspace(-H, H, H) / ratio
+    xs, ys = meshgrid(range_x, range_y)
+    zs = np.zeros_like(xs)
 
-    # tic = time.time()
-    # julia_hits = compute_julia(mgx, mgy, constant_xy, 255)
+    mgx = np.zeros_like(xs)
+    mgy = np.zeros_like(xs)
+
+    # TODO: rotate and translate xs, ys, zs, to mgx, mgy, mgz
+    for j in range(H):
+        for i in range(W):
+            x0 = xs[j, i]
+            y0 = ys[j, i]
+            z0 = zs[j, i]
+            x1 = pos_xyz[0] + x0*r_mat[0, 0] + y0*r_mat[0, 1] + z0*r_mat[0, 2]
+            y1 = pos_xyz[1] + x0*r_mat[1, 0] + y0*r_mat[1, 1] + z0*r_mat[1, 2]
+            z1 = pos_xyz[2] + x0*r_mat[2, 0] + y0*r_mat[2, 1] + z0*r_mat[2, 2]
+
+            x, y = zoom_space_to_cartesian(x1, y1, z1, pos_xyz[0], pos_xyz[1])
+            mgx[j, i] = x
+            mgy[j, i] = y
+    return mgx, mgy
+
+
+@jit
+def juliaset2(dim_xy, pos_xyz, r_mat, constant_xy):
+    mgx, mgy = generate_mesh2(dim_xy, pos_xyz, r_mat)
     julia_hits = compute_julia_numba(mgx, mgy, constant_xy, 255)
     return julia_hits
+
 
 def juliaset(center_xy, constant_xy, dim_xy, zoom):
     cx, cy = center_xy
@@ -95,10 +124,31 @@ def juliaset(center_xy, constant_xy, dim_xy, zoom):
 
     for zoom in range(20):
         tic = time.time()
-        julia_hits = super(width, height, ratio, cx, cy, zoom, constant_xy)
+        julia_hits = juliaset2(width, height, ratio, cx, cy, zoom, constant_xy)
         utils.export_to_png(f"zoom/julia_{zoom}", julia_hits)
         print("elapsed time: ", time.time() - tic, "s")
 
 
+def main():
+    from numba.typed import List
+
+    # juliaset((-1, 0), (-0.8372, -0.1939), (1000, 1000), 0.5)
+    dim_xy = (1000, 1000)
+
+    for zoom in range(5):
+        pos_xyz = (0, 0, zoom)
+        r_mat = np.array([
+            [1, 0, 0],
+            [0, 1, 0],
+            [0, 0, 1],
+        ])
+        constant_xy = (-0.8372, -0.1939)
+
+        tic = time.time()
+        julia_hits = juliaset2(dim_xy, pos_xyz, r_mat, constant_xy)
+        print("elapsed time: ", time.time() - tic, "s")
+        utils.export_to_png(f"zoom/juliaset_{zoom}", julia_hits)
+
+
 if __name__ == '__main__':
-    juliaset((-1, 0), (-0.8372, -0.1939), (1000, 1000), 0.5)
+    main()
