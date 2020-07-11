@@ -22,6 +22,8 @@ class FractalExplorer:
         self.r_mat = r_mat
         self.pos_mandel_xy = constant_xy
 
+        self.pos_mouse_mandel_xy = 0, 0
+
     def update_julia_hits(self):
         self.julia_hits = juliaset.juliaset(self.dim_xy, self.pos_julia_xy, self.zoom, self.r_mat, self.pos_mandel_xy)
 
@@ -29,12 +31,13 @@ class FractalExplorer:
         self.mandel_hits = juliaset.mandelbrotset(self.dim_xy, self.pos_mandel_xy, self.zoom, self.r_mat)
 
     def color_map(self, hits):
+        hits = (np.log(hits+1)*20).astype(np.uint16)
         maxhit = np.max(hits)
         # BRG colors
         color_map = np.array([
             [  0,  0,  0],
-            [255,  0,  0],
             [  0,255,255],
+            [255,  0,  0],
             [255,255,255],
         ], dtype=np.uint8)
         color_map = cv.resize(color_map, dsize=(3, maxhit+1), interpolation=cv.INTER_LINEAR)
@@ -50,11 +53,14 @@ class FractalExplorer:
         tic = time.time()
         self.mandel_display = self.color_map(self.mandel_hits)
         print(time.time()-tic)
-        # TODO: convert constant_xy to center_xy
-        cv.circle(self.mandel_display, (200, 200), 3, (127,))
+        cv.circle(self.mandel_display, self.mousePosition, 3, (127,))
+
 
     def putText(self):
-        self.info = f"Julia pos: {self.pos_julia_xy}\nMandel pos: {self.pos_mandel_xy}\nZoom: 2^{self.zoom:.2f}"
+        self.info = f"""Julia pos: {self.pos_julia_xy}
+        Mandel pos: {self.pos_mandel_xy}
+        Zoom: 2^{self.zoom:.2f}
+        mandel mouse: ({self.pos_mouse_mandel_xy[0]:.3f}, {self.pos_mouse_mandel_xy[1]:.3f})"""
         H = self.liveImg.shape[0]
         infos = self.info.split("\n")
         pos_y = H-20*len(infos)
@@ -76,7 +82,18 @@ class FractalExplorer:
 
         # mouse position in pixels on image 0
         self.mousePosition = x, y
-        # self.display()
+
+        W, H = self.dim_xy
+        if x < W:
+            # mouse on juliaset
+            pass
+        else:
+            # mouse on mandelbrot
+            pos_screen_xy = (self.mousePosition[0] - W, self.mousePosition[1])
+            self.pos_mouse_mandel_xy = juliaset.screen_space_to_cartesian(
+                self.dim_xy, self.pos_mandel_xy, self.zoom, self.r_mat, pos_screen_xy)
+            self.display()
+
 
 
     def start(self):
@@ -96,6 +113,7 @@ class FractalExplorer:
             key = chr(cv.waitKey(0) & 0xFF)
 
             if key in 'u':
+                self.zoom += 1
                 print("updating...")
                 tic = time.time()
                 self.update_julia_hits()

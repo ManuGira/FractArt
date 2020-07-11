@@ -16,6 +16,7 @@ def compute_julia(mgx, mgy, c, max_iter=80):
         julia_hits[mask] = julia_hits[mask] + 1
     return julia_hits
 
+
 @njit
 def apply_color_map(hits, color_map):
     H, W = hits.shape
@@ -25,6 +26,8 @@ def apply_color_map(hits, color_map):
             bgr = color_map[hits[j, i]]
             out[j, i, :] = bgr
     return out
+
+
 @njit
 def zoom_space_to_cartesian(x, y, z, cx, cy):
     cart_x = (x-cx)/2**(z-1) + cx
@@ -76,6 +79,23 @@ def compute_mandelbrot_pixel(x, y):
         hit += 1
     return hit
 
+
+@njit
+def screen_space_to_cartesian(dim_xy, pos_xy, zoom, r_mat, pos_screen_xy):
+    W, H = dim_xy
+    pos_xyz = pos_xy + (zoom,)
+    size = max(W, H)
+    px_size = 2 / size
+
+    i, j = pos_screen_xy
+
+    y = -1 + j * px_size
+    x = -1 + i * px_size
+    z = 0
+    x, y, z = apply_rotation(x, y, z, r_mat)
+    x, y, z = apply_translation(x, y, z, pos_xyz)
+    x, y = zoom_space_to_cartesian(x, y, z, pos_xyz[0], pos_xyz[1])
+    return x, y
 
 @jit(nopython=True, parallel=True)
 def juliaset(dim_xy, pos_xy, zoom, r_mat, constant_xy):
