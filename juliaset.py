@@ -70,8 +70,9 @@ def compute_mandelbrot_pixel(x, y):
 
 
 @jit(nopython=True, parallel=True)
-def juliaset(dim_xy, pos_xyz, r_mat, constant_xy):
+def juliaset(dim_xy, pos_xy, zoom, r_mat, constant_xy):
     W, H = dim_xy
+    pos_xyz = pos_xy + (zoom,)
     size = max(W, H)
     px_size = 2/size
 
@@ -91,10 +92,12 @@ def juliaset(dim_xy, pos_xyz, r_mat, constant_xy):
 
 
 @jit(nopython=True, parallel=True)
-def mandelbrotset(dim_xy, pos_xyz, r_mat):
+def mandelbrotset(dim_xy, pos_xy, zoom, r_mat):
     W, H = dim_xy
     size = max(W, H)
     px_size = 2/size
+
+    pos_xyz = pos_xy + (zoom,)
 
     mandelbrot_hits = np.zeros(shape=(H, W), dtype=np.uint16)
 
@@ -112,14 +115,15 @@ def mandelbrotset(dim_xy, pos_xyz, r_mat):
 
 def get_initial_values():
     dim_xy = (500, 500)
-    pos_xyz = (0, 0, 0)
+    pos_julia_xy = (0, 0)
+    zoom = 0
     r_mat = np.array([
         [1, 0, 0],
         [0, 1, 0],
         [0, 0, 1],
     ])
-    constant_xy = (-0.8372, -0.1939)
-    return dim_xy, pos_xyz, r_mat, constant_xy
+    constant_xy = (-0.8372, -0.1939)  # constant is the position xy of mandelbrot
+    return dim_xy, pos_julia_xy, zoom, r_mat, constant_xy
 
 def main():
     from numba.typed import List
@@ -137,7 +141,7 @@ def main():
              (-0.8372, -0.1939))
     totic = 0
     for zoom in range(20):
-        pos_xyz = (0, 0, zoom)
+        pos_julia_xy = (0, 0)
         r_mat = np.array([
             [1, 0, 0],
             [0, 1, 0],
@@ -146,7 +150,7 @@ def main():
         constant_xy = (-0.8372, -0.1939)
 
         tic = time.time()
-        julia_hits = juliaset(dim_xy, pos_xyz, r_mat, constant_xy)
+        julia_hits = juliaset(dim_xy, pos_julia_xy, zoom, r_mat, constant_xy)
         tac = time.time()
         totic += tac-tic
         print(zoom, "elapsed time: ", tac - tic, "s")

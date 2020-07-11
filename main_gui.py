@@ -1,38 +1,57 @@
 import cv2 as cv
 import numpy as np
 import juliaset
+import time
+
 
 class FractalExplorer:
-
     def __init__(self):
         self.julia_hits = None
         self.mandel_hits = None
+        self.julia_display = None
+        self.mandel_display = None
         self.liveImg = None
         self.mousePosition = (0, 0)
         self.winName = 'image'
         self.info = ""
 
-        dim_xy, pos_xyz, r_mat, constant_xy = juliaset.get_initial_values()
+        dim_xy, pos_julia_xy, zoom, r_mat, constant_xy = juliaset.get_initial_values()
         self.dim_xy = dim_xy
-        self.pos_xyz = pos_xyz
+        self.pos_julia_xy = pos_julia_xy
+        self.zoom = zoom
         self.r_mat = r_mat
-        self.constant_xy = constant_xy
-
+        self.pos_mandel_xy = constant_xy
 
     def update_julia_hits(self):
-        self.julia_hits = juliaset.juliaset(self.dim_xy, self.pos_xyz, self.r_mat, self.constant_xy)
-
+        self.julia_hits = juliaset.juliaset(self.dim_xy, self.pos_julia_xy, self.zoom, self.r_mat, self.pos_mandel_xy)
 
     def update_mandel_hits(self):
-        self.mandel_hits = juliaset.mandelbrotset(self.dim_xy, self.pos_xyz, self.r_mat)
+        self.mandel_hits = juliaset.mandelbrotset(self.dim_xy, self.pos_mandel_xy, self.zoom, self.r_mat)
+
+    def color_map(self, hits):
+        maxhit = np.max(hits)
+        return (hits.astype(float) * 255/maxhit).astype(np.uint8)
+
+    def update_julia_display(self):
+        self.julia_display = self.color_map(self.julia_hits)
+
+    def update_mandel_display(self):
+        self.mandel_display = self.color_map(self.mandel_hits)
+        # TODO: convert constant_xy to center_xy
+        cv.circle(self.mandel_display, (200, 200), 3, (127,))
+
+    def putText(self):
+        self.info = f"Julia pos: {self.pos_julia_xy}\nMandel pos: {self.pos_mandel_xy}\nZoom: 2^{self.zoom:.2f}"
+        H = self.liveImg.shape[0]
+        infos = self.info.split("\n")
+        pos_y = H-20*len(infos)
+        for k, txt in enumerate(infos):
+            cv.putText(self.liveImg, txt, (20, pos_y+20*k), cv.FONT_HERSHEY_SIMPLEX, .5, (255, 255, 255), 1, cv.LINE_AA)
 
 
     def display(self):
-        self.info = f"pos: {self.pos_xyz}, C: {self.constant_xy}"
-        julia_display = (255*(self.julia_hits.astype(float)+1)/np.max(self.julia_hits)).astype(np.uint8)
-        mandel_display = (255*(self.mandel_hits.astype(float)+1)/np.max(self.mandel_hits)).astype(np.uint8)
-        self.liveImg = np.hstack([julia_display, mandel_display])
-        # cv.putText(self.liveImg, info, (20, H-20), cv.FONT_HERSHEY_SIMPLEX, .5, (255, 255, 255), 1, cv.LINE_AA)
+        self.liveImg = np.hstack([self.julia_display, self.mandel_display])
+        self.putText()
         cv.imshow(self.winName, self.liveImg)
 
 
@@ -48,15 +67,29 @@ class FractalExplorer:
 
     def start(self):
         print(f"Start fractal explorer: ")
-        cv.namedWindow(self.winName)
-        cv.setMouseCallback(self.winName, self.mouseCallback)
 
         self.update_julia_hits()
         self.update_mandel_hits()
+        self.update_julia_display()
+        self.update_mandel_display()
+
+        cv.namedWindow(self.winName)
+        cv.setMouseCallback(self.winName, self.mouseCallback)
+
         key = '-'
         while key not in ' ':
             self.display()
             key = chr(cv.waitKey(0) & 0xFF)
+
+            if key in 'u':
+                print("updating...")
+                tic = time.time()
+                self.update_julia_hits()
+                self.update_mandel_hits()
+                self.update_julia_display()
+                self.update_mandel_display()
+                dt = time.time() - tic
+                print(f"computed {2*self.dim_xy[0]*self.dim_xy[1]} pixels in {dt:.3f} s")
 
             if key in 'q':
                 print("closing...")
