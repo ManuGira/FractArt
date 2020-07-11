@@ -30,13 +30,26 @@ class FractalExplorer:
 
     def color_map(self, hits):
         maxhit = np.max(hits)
-        return (hits.astype(float) * 255/maxhit).astype(np.uint8)
+        # BRG colors
+        color_map = np.array([
+            [  0,  0,  0],
+            [255,  0,  0],
+            [  0,255,255],
+            [255,255,255],
+        ], dtype=np.uint8)
+        color_map = cv.resize(color_map, dsize=(3, maxhit+1), interpolation=cv.INTER_LINEAR)
+        color_map.shape = (color_map.shape[0], 1, 3)
+        return juliaset.apply_color_map(hits, color_map)
 
     def update_julia_display(self):
+        tic = time.time()
         self.julia_display = self.color_map(self.julia_hits)
+        print(time.time()-tic)
 
     def update_mandel_display(self):
+        tic = time.time()
         self.mandel_display = self.color_map(self.mandel_hits)
+        print(time.time()-tic)
         # TODO: convert constant_xy to center_xy
         cv.circle(self.mandel_display, (200, 200), 3, (127,))
 
@@ -46,7 +59,8 @@ class FractalExplorer:
         infos = self.info.split("\n")
         pos_y = H-20*len(infos)
         for k, txt in enumerate(infos):
-            cv.putText(self.liveImg, txt, (20, pos_y+20*k), cv.FONT_HERSHEY_SIMPLEX, .5, (255, 255, 255), 1, cv.LINE_AA)
+            cv.putText(self.liveImg, txt, (20, pos_y+20*k), cv.FONT_HERSHEY_SIMPLEX, .5, (0, 0, 0), 2, cv.LINE_AA)
+            cv.putText(self.liveImg, txt, (20, pos_y+20*k), cv.FONT_HERSHEY_SIMPLEX, .5, (0, 255, 255), 1, cv.LINE_AA)
 
 
     def display(self):
