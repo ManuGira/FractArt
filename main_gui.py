@@ -2,6 +2,7 @@ import cv2 as cv
 import numpy as np
 import juliaset
 import time
+import pickle
 
 
 class FractalExplorer:
@@ -11,7 +12,7 @@ class FractalExplorer:
         self.julia_display = None
         self.mandel_display = None
         self.liveImg = None
-        self.mousePosition = (0, 0)
+        self.pos_mouse_julia_screen_xy = (0, 0)
         self.winName = 'image'
         self.info = ""
 
@@ -22,17 +23,27 @@ class FractalExplorer:
         self.r_mat = r_mat
         self.pos_mandel_xy = constant_xy
 
+        self.pos_mouse_julia_xy = 0, 0
         self.pos_mouse_mandel_xy = 0, 0
+        self.pos_mouse_julia_screen_xy = 0, 0
+        self.pos_mouse_mandel_screen_xy = 0, 0
         self.light_effect = -1
 
+        self.itinary = []
+
     def update_julia_hits(self):
-        self.julia_hits = juliaset.juliaset(self.dim_xy, self.pos_julia_xy, self.zoom, self.r_mat, self.pos_mandel_xy)
+        self.julia_hits = juliaset.juliaset(
+            self.dim_xy,
+            self.pos_julia_xy,
+            self.zoom,
+            self.r_mat,
+            self.pos_mandel_xy)
 
     def update_mandel_hits(self):
         self.mandel_hits = juliaset.mandelbrotset(self.dim_xy, self.pos_mandel_xy, self.zoom, self.r_mat)
 
     def glow_effect(self, img):
-        img2 = cv.GaussianBlur(img, ksize=(21,21), sigmaX=5, sigmaY=5)
+        img2 = cv.GaussianBlur(img, ksize=(21, 21), sigmaX=15, sigmaY=15)
         out = img2
         out[img>img2] = img[img>img2]
         return out
@@ -73,7 +84,8 @@ class FractalExplorer:
         tic = time.time()
         self.mandel_display = self.color_map(self.mandel_hits)
         print(time.time()-tic)
-        cv.circle(self.mandel_display, self.mousePosition, 3, (127,))
+
+        cv.circle(self.mandel_display, self.pos_mouse_mandel_screen_xy, 3, (127,))
 
 
     def putText(self):
@@ -96,25 +108,28 @@ class FractalExplorer:
 
 
     def mouseCallback(self, event, x, y, flags, param):
-        # print(event, flags, param)
-        if event == cv.EVENT_LBUTTONUP:
-            pass
-
-        # mouse position in pixels on image 0
-        self.mousePosition = x, y
-
         W, H = self.dim_xy
+        self.pos_mouse_julia_screen_xy = x, y
+        self.pos_mouse_mandel_screen_xy = x-W, y
+
+        if event == cv.EVENT_LBUTTONUP:
+            print(x, y)
+
         if x < W:
             # mouse on juliaset
+
+            # mouse on mandelbrot
+            pos_screen_xy = (self.pos_mouse_julia_screen_xy[0], self.pos_mouse_julia_screen_xy[1])
+            self.pos_mouse_julia_xy = juliaset.screen_space_to_cartesian(
+                self.dim_xy, self.pos_mandel_xy, self.zoom, self.r_mat, pos_screen_xy)
+
             self.light_effect = x/W
             self.update_julia_display()
         else:
             # mouse on mandelbrot
-            pos_screen_xy = (self.mousePosition[0] - W, self.mousePosition[1])
             self.pos_mouse_mandel_xy = juliaset.screen_space_to_cartesian(
-                self.dim_xy, self.pos_mandel_xy, self.zoom, self.r_mat, pos_screen_xy)
+                self.dim_xy, self.pos_mandel_xy, self.zoom, self.r_mat, self.pos_mouse_mandel_screen_xy)
         self.display()
-
 
 
     def start(self):
@@ -132,6 +147,20 @@ class FractalExplorer:
         while key not in ' ':
             self.display()
             key = chr(cv.waitKey(0) & 0xFF)
+
+            if key in 's':
+                # saving current location to itinary
+                location = {
+                    "pos_julia_xy": self.pos_julia_xy,
+                    "zoom": self.zoom,
+                    "r_mat": self.r_mat,
+                    "pos_mandel_xy": self.pos_mandel_xy,
+                }
+                self.itinary.append(location)
+                print(self.itinary)
+                with open("itinary.pkl", "wb") as pickle_out:
+                    pickle.dump(self.itinary, pickle_out)
+
 
             if key in 'u':
                 self.zoom += 1
