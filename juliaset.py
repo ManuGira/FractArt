@@ -79,6 +79,45 @@ def compute_mandelbrot_pixel(x, y):
         hit += 1
     return hit
 
+# @njit
+# def screen_space_to_zoom_space(dim_xy, pos_xy, zoom, r_mat, pos_screen_xy):
+#     W, H = dim_xy
+#     pos_xyz = pos_xy + (zoom,)
+#     size = max(W, H)
+#     px_size = 2 / size
+#
+#     i, j = pos_screen_xy
+#
+#     y = -1 + j * px_size
+#     x = -1 + i * px_size
+#     z = 0
+#     x, y, z = apply_rotation(x, y, z, r_mat)
+#     x, y, z = apply_translation(x, y, z, pos_xyz)
+#     return x, y, z
+
+def cartesian_space_to_screen(dim_xy, pos_xy, zoom, r_mat, pos_cart_xy):
+    """
+    TODO:
+    interection de la droite du point pos_cart_xy dans le zoom space avec le screen.
+    la droite passe part les 2 points
+        (pos_cartxy[0], pos_cartxy[0], 0)
+    et
+        (2*pos_cartxy[0], 2*pos_cartxy[0], 1)
+
+    le plan du screen passe part le point:
+        (pos_xy[0], pos_xy[1], zoom)
+    et a comme vecteur normal:
+        r_mat [:, 2]
+
+    :param dim_xy:
+    :param pos_xy:
+    :param zoom:
+    :param r_mat:
+    :param pos_cart_xy:
+    :return:
+    """
+
+
 
 @njit
 def screen_space_to_cartesian(dim_xy, pos_xy, zoom, r_mat, pos_screen_xy):
