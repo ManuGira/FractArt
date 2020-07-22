@@ -3,6 +3,7 @@ import numpy as np
 import juliaset
 import time
 import pickle
+import fractal_painter
 
 
 class FractalExplorer:
@@ -42,47 +43,16 @@ class FractalExplorer:
     def update_mandel_hits(self):
         self.mandel_hits = juliaset.mandelbrotset(self.dim_xy, self.pos_mandel_xy, self.zoom, self.r_mat)
 
-    def glow_effect(self, img):
-        img2 = cv.GaussianBlur(img, ksize=(21, 21), sigmaX=15, sigmaY=15)
-        out = img2
-        out[img>img2] = img[img>img2]
-        return out
-
-    def color_map(self, hits):
-        dB = lambda x: (20*np.log(x+1)).astype(np.uint16)
-        hits = dB(hits)
-        N = np.max(hits)+1
-        # BRG colors
-        color_map_0 = np.array([
-            [0, 0, 0],
-            [255, 255, 0],
-            [0, 255, 255],
-            [63, 195, 0],
-            [255, 255, 255],
-        ], dtype=np.uint8)
-        color_map_0 = cv.resize(color_map_0, dsize=(3, N), interpolation=cv.INTER_LINEAR)
-        color_map_1 = np.array([
-            [0, 0, 255],
-            [255, 255, 255],
-        ], dtype=np.uint8)
-        color_map_1 = cv.resize(color_map_1, dsize=(3, N), interpolation=cv.INTER_LINEAR)
-        color_switch = np.zeros(shape=(N, 1))
-        color_switch[int(self.light_effect*N)] = 1
-        color_map = color_map_0*(1-color_switch) + color_map_1*color_switch
-        # if self.light_effect >= 0:
-        #     color_map[int(maxhit*self.light_effect), :] = [255, 255, 255]
-        color_map.shape = (N, 1, 3)
-        return juliaset.apply_color_map(hits, color_map)
 
     def update_julia_display(self):
         tic = time.time()
-        self.julia_display = self.color_map(self.julia_hits)
-        self.julia_display = self.glow_effect(self.julia_display)
+        self.julia_display = fractal_painter.color_map(self.julia_hits)
+        self.julia_display = fractal_painter.glow_effect(self.julia_display)
         print(time.time()-tic)
 
     def update_mandel_display(self):
         tic = time.time()
-        self.mandel_display = self.color_map(self.mandel_hits)
+        self.mandel_display = fractal_painter.color_map(self.mandel_hits)
         print(time.time()-tic)
 
         cv.circle(self.mandel_display, self.pos_mouse_mandel_screen_xy, 3, (127,))
@@ -94,7 +64,7 @@ class FractalExplorer:
         Zoom: 2^{self.zoom:.2f}
         mandel mouse: ({self.pos_mouse_mandel_xy[0]:.3f}, {self.pos_mouse_mandel_xy[1]:.3f})"""
         H = self.liveImg.shape[0]
-        infos = self.info.split("\n")
+        infos = self.info.split("\n        ")
         pos_y = H-20*len(infos)
         for k, txt in enumerate(infos):
             cv.putText(self.liveImg, txt, (20, pos_y+20*k), cv.FONT_HERSHEY_SIMPLEX, .5, (0, 0, 0), 2, cv.LINE_AA)

@@ -1,13 +1,16 @@
 import pickle
 import juliaset
+import fractal_painter
+import utils
 
 def generate_images_from_hits():
     print("go")
     with open("hits.pkl", "rb") as pickle_in:
         all_hits = pickle.load(pickle_in)
-    for julia_hits in all_hits:
-        print("ok")
-        # TODO:
+    for k, julia_hits in enumerate(all_hits):
+        julia_bgr = fractal_painter.color_map(julia_hits)
+        julia_bgr = fractal_painter.glow_effect(julia_bgr)
+        utils.export_to_png(f"julia_bgr_{k}", julia_bgr)
 
 def interpolate_locations(locA, locB, t):
     out = {}

@@ -18,17 +18,6 @@ def compute_julia(mgx, mgy, c, max_iter=80):
 
 
 @njit
-def apply_color_map(hits, color_map):
-    H, W = hits.shape
-    out = np.zeros(shape=(H, W, 3), dtype=np.uint8)
-    for j in range(H):
-        for i in range(W):
-            bgr = color_map[hits[j, i]]
-            out[j, i, :] = bgr
-    return out
-
-
-@njit
 def zoom_space_to_cartesian(x, y, z, cx, cy):
     cart_x = (x-cx)/2**(z-1) + cx
     cart_y = (y-cy)/2**(z-1) + cy
