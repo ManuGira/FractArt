@@ -132,12 +132,15 @@ def juliaset(dim_xy, pos_xy, zoom, r_mat, constant_xy):
     size = max(W, H)
     px_size = 2/size
 
+    dx = min(1.0, W/H)
+    dy = min(1.0, H/W)
+
     julia_hits = np.zeros(shape=(H, W), dtype=np.uint16)
 
     for j in range(H):
         for i in range(W):
-            y = -1 + j * px_size
-            x = -1 + i * px_size
+            y = -dy + j * px_size
+            x = -dx + i * px_size
             z = 0
             x, y, z = apply_rotation(x, y, z, r_mat)
             x, y, z = apply_translation(x, y, z, pos_xyz)
