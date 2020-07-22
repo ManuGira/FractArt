@@ -2,6 +2,27 @@ import pickle
 import juliaset
 import fractal_painter
 import utils
+import os
+import cv2 as cv
+
+def generate_video_from_folder():
+    folder = "gallery/julia_stop_motion/"
+    img0 = cv.imread(folder + "0.png")
+    H, W, _ = img0.shape
+
+    # Define the codec and create VideoWriter object
+    fourcc = cv.VideoWriter_fourcc(*'mp4v')  # Be sure to use lower case
+    out = cv.VideoWriter("gallery/juliaset.mp4", fourcc, 20.0, (W, H))
+
+    for k in range(len(os.listdir(folder))):
+        image_path = folder + str(k) + ".png"
+        frame = cv.imread(image_path)
+
+        out.write(frame)  # Write out frame to video
+
+        print(k)
+    # Release everything if job is finished
+    out.release()
 
 def generate_images_from_hits():
     print("go")
@@ -10,7 +31,7 @@ def generate_images_from_hits():
     for k, julia_hits in enumerate(all_hits):
         julia_bgr = fractal_painter.color_map(julia_hits)
         julia_bgr = fractal_painter.glow_effect(julia_bgr)
-        utils.export_to_png(f"julia_bgr_{k}", julia_bgr)
+        utils.export_to_png(f"julia_stop_motion/{k}", julia_bgr)
 
 def interpolate_locations(locA, locB, t):
     out = {}
@@ -26,7 +47,7 @@ def interpolate_locations(locA, locB, t):
 
 def generate_hits_from_itinary():
     nb_inter_frame = 3
-    dim_xy = (1000, 1000)
+    dim_xy = (720, 540)
 
     with open("itinary.pkl", "rb") as pickle_in:
         itinary = pickle.load(pickle_in)
@@ -54,5 +75,6 @@ def generate_hits_from_itinary():
 
 
 if __name__ == '__main__':
-    # generate_hits_from_itinary()
+    generate_hits_from_itinary()
     generate_images_from_hits()
+    generate_video_from_folder()
