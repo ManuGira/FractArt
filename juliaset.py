@@ -41,9 +41,9 @@ def apply_translation(x, y, z, pos_xyz):
 
 
 @njit
-def compute_julia_pixel(x, y, constant_xy):
+def compute_julia_pixel(x, y, constant_xy, max_iter):
     hit = 0
-    while x ** 2 + y ** 2 < 100 and hit < 1024:
+    while x ** 2 + y ** 2 < 100 and hit < max_iter:
         x0 = x
         y0 = y
         x1 = x0 ** 2 - y0 ** 2 + constant_xy[0]
@@ -126,27 +126,33 @@ def screen_space_to_cartesian(dim_xy, pos_xy, zoom, r_mat, pos_screen_xy):
     return x, y
 
 @jit(nopython=True, parallel=True)
-def juliaset(dim_xy, pos_xy, zoom, r_mat, constant_xy):
+def juliaset(dim_xy, pos_xy, zoom, r_mat, constant_xy, supersampling=1):
+    max_iter = 1024
     W, H = dim_xy
     pos_xyz = pos_xy + (zoom,)
     size = max(W, H)
     px_size = 2/size
+    sub_px_size = px_size / supersampling
 
     dx = min(1.0, W/H)
     dy = min(1.0, H/W)
 
     julia_hits = np.zeros(shape=(H, W), dtype=np.uint16)
-
     for j in range(H):
         for i in range(W):
-            y = -dy + j * px_size
-            x = -dx + i * px_size
-            z = 0
-            x, y, z = apply_rotation(x, y, z, r_mat)
-            x, y, z = apply_translation(x, y, z, pos_xyz)
-            x, y = zoom_space_to_cartesian(x, y, z, pos_xyz[0], pos_xyz[1])
+            mean_hits = 0
+            for super_j in range(supersampling):
+                for super_i in range(supersampling):
+                    y = -dy + j * px_size + super_j*sub_px_size
+                    x = -dx + i * px_size + super_i*sub_px_size
+                    z = 0
+                    x, y, z = apply_rotation(x, y, z, r_mat)
+                    x, y, z = apply_translation(x, y, z, pos_xyz)
+                    x, y = zoom_space_to_cartesian(x, y, z, pos_xyz[0], pos_xyz[1])
 
-            julia_hits[j, i] = compute_julia_pixel(x, y, constant_xy)
+                    hits = compute_julia_pixel(x, y, constant_xy, max_iter)
+                    mean_hits = mean_hits + hits
+            julia_hits[j, i] = mean_hits // (supersampling ** 2)
     return julia_hits
 
 

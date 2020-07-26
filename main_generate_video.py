@@ -66,7 +66,8 @@ def generate_hits_from_itinary():
                 location["pos_julia_xy"],
                 location["zoom"],
                 location["r_mat"],
-                location["pos_mandel_xy"])
+                location["pos_mandel_xy"],
+                supersampling=1)
             all_hits.append(julia_hits)
     with open("hits.pkl", "wb") as pickle_out:
         pickle.dump(all_hits, pickle_out)
