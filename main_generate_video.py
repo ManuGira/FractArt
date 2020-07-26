@@ -4,34 +4,48 @@ import fractal_painter
 import utils
 import os
 import cv2 as cv
+import time
 
 def generate_video_from_folder():
+    print("generate_video_from_folder: ", end="")
+    tic = time.time()
+
     folder = "gallery/julia_stop_motion/"
     img0 = cv.imread(folder + "0.png")
     H, W, _ = img0.shape
 
     # Define the codec and create VideoWriter object
     fourcc = cv.VideoWriter_fourcc(*'mp4v')  # Be sure to use lower case
-    out = cv.VideoWriter("gallery/juliaset.mp4", fourcc, 20.0, (W, H))
+    out = cv.VideoWriter("gallery/juliaset.mp4", fourcc, 60.0, (W, H))
 
-    for k in range(len(os.listdir(folder))):
+    K = len(os.listdir(folder))
+    for k in range(K):
         image_path = folder + str(k) + ".png"
         frame = cv.imread(image_path)
 
         out.write(frame)  # Write out frame to video
 
-        print(k)
+        if ((100 * k / K) // 10) < ((100 * (k + 1) / K) // 10):
+            print("X", end="")
+    print(f" {time.time()-tic:.4f}s")
     # Release everything if job is finished
     out.release()
 
+
 def generate_images_from_hits():
-    print("go")
+    print("generate_images_from_hits: ", end="")
+    tic = time.time()
     with open("hits.pkl", "rb") as pickle_in:
         all_hits = pickle.load(pickle_in)
+    K = len(all_hits)
     for k, julia_hits in enumerate(all_hits):
         julia_bgr = fractal_painter.color_map(julia_hits)
         julia_bgr = fractal_painter.glow_effect(julia_bgr)
         utils.export_to_png(f"julia_stop_motion/{k}", julia_bgr)
+        if ((100*k/K)//10) < ((100*(k+1)/K)//10):
+            print("X", end="")
+    print(f" {time.time()-tic:.4f}s")
+
 
 def interpolate_locations(locA, locB, t):
     out = {}
@@ -45,8 +59,9 @@ def interpolate_locations(locA, locB, t):
 
     return out
 
+
 def generate_hits_from_itinary():
-    nb_inter_frame = 3
+    nb_inter_frame = 10
     dim_xy = (720, 540)
 
     with open("itinary.pkl", "rb") as pickle_in:
@@ -69,6 +84,9 @@ def generate_hits_from_itinary():
                 location["pos_mandel_xy"],
                 supersampling=1)
             all_hits.append(julia_hits)
+
+            print('.', end='')
+        print(" ")
     with open("hits.pkl", "wb") as pickle_out:
         pickle.dump(all_hits, pickle_out)
     print("ok")
