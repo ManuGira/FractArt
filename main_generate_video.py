@@ -1,26 +1,29 @@
 import pickle
 import juliaset
 import fractal_painter
-import utils
+from utils import pth
 import os
 import cv2 as cv
 import time
 
-def generate_video_from_folder():
+
+
+def generate_video_from_folder(data_folder):
     print("generate_video_from_folder: ", end="")
     tic = time.time()
 
-    folder = "gallery/julia_stop_motion/"
-    img0 = cv.imread(folder + "0.png")
+    imgs_folder = pth(data_folder, "imgs")
+    video_path = pth(data_folder, "juliaset.mp4")
+    img0 = cv.imread(pth(imgs_folder, "0.png"))
     H, W, _ = img0.shape
 
     # Define the codec and create VideoWriter object
     fourcc = cv.VideoWriter_fourcc(*'mp4v')  # Be sure to use lower case
-    out = cv.VideoWriter("gallery/juliaset.mp4", fourcc, 60.0, (W, H))
+    out = cv.VideoWriter(video_path, fourcc, 60.0, (W, H))
 
-    K = len(os.listdir(folder))
+    K = len(os.listdir(imgs_folder))
     for k in range(K):
-        image_path = folder + str(k) + ".png"
+        image_path = pth(imgs_folder, f"{k}.png")
         frame = cv.imread(image_path)
 
         out.write(frame)  # Write out frame to video
@@ -32,16 +35,23 @@ def generate_video_from_folder():
     out.release()
 
 
-def generate_images_from_hits():
+def generate_images_from_hits(data_folder):
     print("generate_images_from_hits: ", end="")
     tic = time.time()
-    with open("hits.pkl", "rb") as pickle_in:
-        all_hits = pickle.load(pickle_in)
-    K = len(all_hits)
-    for k, julia_hits in enumerate(all_hits):
+
+
+    hits_folder = pth(data_folder, "hits")
+    imgs_folder = pth(data_folder, "imgs")
+    if not os.path.exists(imgs_folder):
+        os.makedirs(imgs_folder)
+
+    K = len(os.listdir(hits_folder))
+    for k in range(K):
+        with open(pth(hits_folder, f"{k}.pkl"), "rb") as pickle_in:
+            julia_hits = pickle.load(pickle_in)
         julia_bgr = fractal_painter.color_map(julia_hits)
         julia_bgr = fractal_painter.glow_effect(julia_bgr)
-        utils.export_to_png(f"julia_stop_motion/{k}", julia_bgr)
+        cv.imwrite(pth(imgs_folder, f"{k}.png"), julia_bgr)
         if ((100*k/K)//10) < ((100*(k+1)/K)//10):
             print("X", end="")
     print(f" {time.time()-tic:.4f}s")
@@ -60,17 +70,27 @@ def interpolate_locations(locA, locB, t):
     return out
 
 
-def generate_hits_from_itinary():
-    nb_inter_frame = 10
+def generate_hits_from_itinary(data_folder):
+    print("generate_hits_from_itinary")
+    tic = time.time()
+
+    nb_inter_frame = 60
     dim_xy = (720, 540)
 
-    with open("itinary.pkl", "rb") as pickle_in:
+    with open(pth(data_folder, "itinary.pkl"), "rb") as pickle_in:
         itinary = pickle.load(pickle_in)
 
-    print(itinary)
 
-    all_hits = []
+    print(f"Itinary made of {len(itinary)} locations interpolated by {nb_inter_frame} frames -> total = {(len(itinary)-1)*nb_inter_frame} frames")
+
+    hits_folder = pth(data_folder, "hits")
+    if not os.path.exists(hits_folder):
+        os.makedirs(hits_folder)
+
+    k = 0
     for i in range(len(itinary)-1):
+        print(f"{i} ", end="")
+        tic = time.time()
         locA = itinary[i]
         locB = itinary[i+1]
         for j in range(nb_inter_frame):
@@ -82,18 +102,19 @@ def generate_hits_from_itinary():
                 location["zoom"],
                 location["r_mat"],
                 location["pos_mandel_xy"],
-                supersampling=1)
-            all_hits.append(julia_hits)
+                supersampling=3)
 
+            with open(pth(hits_folder, f"{k}.pkl"), "wb") as pickle_out:
+                pickle.dump(julia_hits, pickle_out)
+            k += 1
             print('.', end='')
         print(" ")
-    with open("hits.pkl", "wb") as pickle_out:
-        pickle.dump(all_hits, pickle_out)
-    print("ok")
+    print(f" {time.time()-tic:.4f}s")
 
 
 
 if __name__ == '__main__':
-    generate_hits_from_itinary()
-    generate_images_from_hits()
-    generate_video_from_folder()
+    data_folder = "output"
+    generate_hits_from_itinary(data_folder)
+    generate_images_from_hits(data_folder)
+    generate_video_from_folder(data_folder)

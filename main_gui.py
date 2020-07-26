@@ -4,10 +4,15 @@ import juliaset
 import time
 import pickle
 import fractal_painter
+from utils import pth
+# from threading import Thread
+
+# cv_process = Thread(target=pss.run, kwargs={"online": False})
+# cv_process.start()
 
 
 class FractalExplorer:
-    def __init__(self):
+    def __init__(self, data_folder):
         self.julia_hits = None
         self.mandel_hits = None
         self.julia_display = None
@@ -31,6 +36,7 @@ class FractalExplorer:
         self.pos_mouse_julia_screen_xy = W//2, H//2
         self.light_effect = -1
 
+        self.itinary_path = pth(data_folder, "itinary.pkl")
         self.itinary = []
 
     def update_julia_hits(self):
@@ -142,7 +148,7 @@ class FractalExplorer:
                 }
                 self.itinary.append(location)
                 print(self.itinary)
-                with open("itinary.pkl", "wb") as pickle_out:
+                with open(self.itinary_path, "wb") as pickle_out:
                     pickle.dump(self.itinary, pickle_out)
 
 
@@ -164,8 +170,8 @@ class FractalExplorer:
         print("terminated")
 
 
-def main():
-    fe = FractalExplorer()
+def main(data_folder):
+    fe = FractalExplorer(data_folder)
     fe.start()
 
 
@@ -178,5 +184,6 @@ def printPressedKey():
 
 if __name__ == '__main__':
     # printPressedKey()
-    main()
+    data_folder = "output"
+    main(data_folder)
 

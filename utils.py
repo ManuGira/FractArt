@@ -2,6 +2,16 @@ import os
 import cv2 as cv
 import numpy as np
 
+def pth(*args):
+    out = "."
+    for arg in args:
+        if isinstance(arg, list):
+            arg = os.path.join(*arg)
+        out = os.path.join(out, arg)
+    out = os.path.normpath(out)
+    out = os.path.join(".", out)
+    return out
+
 def export_to_png(name, data):
     folder = "gallery"
     if not os.path.exists(folder):
