@@ -20,16 +20,18 @@ def color_gradient(colors_bgr, length, interpolation=cv.INTER_LINEAR):
 
 
 def color_map(hits):
-    dB = lambda x: (20 * np.log(x + 1)).astype(np.uint16)
-    hits = dB(hits)
-    N = np.max(hits) + 1
+    # dB = lambda x: (20 * np.log(x + 1)).astype(np.uint16)
+    # hits = dB(hits)
+    N = 1024
     # BRG colors
     color_map_0 = color_gradient([
         [0, 0, 0],
-        [255, 255, 0],
-        [0, 255, 255],
-        [63, 195, 0],
-        [255, 255, 255],
+        [255, 255, 95],
+        [0, 0, 0],
+        [169, 127, 255],
+        [0, 0, 0],
+        [127, 255, 255],
+        [0, 0, 0],
     ], N)
     color_map_1 = color_gradient([
         [0, 0, 255],
