@@ -140,7 +140,7 @@ def juliaset(dim_xy, pos_xy, zoom, r_mat, constant_xy, supersampling=1):
     julia_hits = np.zeros(shape=(H, W), dtype=np.uint16)
     for j in range(H):
         for i in range(W):
-            mean_hits = 0
+            min_hits = max_iter
             for super_j in range(supersampling):
                 for super_i in range(supersampling):
                     y = -dy + j * px_size + super_j*sub_px_size
@@ -151,8 +151,8 @@ def juliaset(dim_xy, pos_xy, zoom, r_mat, constant_xy, supersampling=1):
                     x, y = zoom_space_to_cartesian(x, y, z, pos_xyz[0], pos_xyz[1])
 
                     hits = compute_julia_pixel(x, y, constant_xy, max_iter)
-                    mean_hits = mean_hits + hits
-            julia_hits[j, i] = mean_hits // (supersampling ** 2)
+                    min_hits = min(min_hits, hits)
+            julia_hits[j, i] = min_hits
     return julia_hits
 
 
