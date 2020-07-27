@@ -2,9 +2,11 @@ import pickle
 import juliaset
 import fractal_painter
 from utils import pth
+import utils
 import os
 import cv2 as cv
 import time
+import numpy as np
 
 
 
@@ -70,17 +72,28 @@ def interpolate_locations(locA, locB, t):
     return out
 
 
-def generate_hits_from_itinary(data_folder, dim_xy, nb_inter_frame):
+def estimate_computation_time(itinary, dim_xy, nb_inter_frame, supersampling):
+    time_per_pixels = [location["time_per_px"] for location in itinary]
+    time_per_pixels[0] *= 0.5
+    time_per_pixels[-1] *= 0.5
+    avg_time_per_pixels = sum(time_per_pixels)/(len(time_per_pixels)-1)
+    W, H = dim_xy
+    out = avg_time_per_pixels * W*H * nb_inter_frame * (len(itinary)-1) * supersampling**2
+    # no idea why, but it works better by mutliplying by 0.7
+    return 0.7*out
+
+
+def generate_hits_from_itinary(data_folder, dim_xy, nb_inter_frame, supersampling):
     print("generate_hits_from_itinary")
-    tic = time.time()
-
-
+    tic0 = time.time()
 
     with open(pth(data_folder, "itinary.pkl"), "rb") as pickle_in:
         itinary = pickle.load(pickle_in)
 
-
     print(f"Itinary made of {len(itinary)} locations interpolated by {nb_inter_frame} frames -> total = {(len(itinary)-1)*nb_inter_frame} frames")
+    estimated_time = estimate_computation_time(itinary, dim_xy, nb_inter_frame, supersampling)
+    eh, em, es = utils.sec_to_hms(estimated_time)
+    print(f"estimated computation time: {eh}h {em}m {es}s")
 
     hits_folder = pth(data_folder, "hits")
     if not os.path.exists(hits_folder):
@@ -89,7 +102,7 @@ def generate_hits_from_itinary(data_folder, dim_xy, nb_inter_frame):
     k = 0
     for i in range(len(itinary)-1):
         print(f"{i} ", end="")
-        tic = time.time()
+        tic1 = time.time()
         locA = itinary[i]
         locB = itinary[i+1]
         for j in range(nb_inter_frame):
@@ -101,7 +114,7 @@ def generate_hits_from_itinary(data_folder, dim_xy, nb_inter_frame):
                 location["zoom"],
                 location["r_mat"],
                 location["pos_mandel_xy"],
-                supersampling=1,
+                supersampling=supersampling,
                 fisheye_factor=location["fisheye_factor"],
             )
 
@@ -109,16 +122,18 @@ def generate_hits_from_itinary(data_folder, dim_xy, nb_inter_frame):
                 pickle.dump(julia_hits, pickle_out)
             k += 1
             print('.', end='')
-        print(f" {time.time()-tic:.4f}s")
+        print(f" {time.time()-tic1:.4f}s")
+    print(f"Total time: {time.time()-tic0:.1f}s")
 
 
 
 if __name__ == '__main__':
     data_folder = "output"
-    nb_inter_frame = 20
     dim_xy = (720, 540)
-    fps = 30
+    nb_inter_frame = 60
+    supersampling = 3
+    fps = 60
 
-    generate_hits_from_itinary(data_folder, nb_inter_frame, dim_xy)
+    generate_hits_from_itinary(data_folder, dim_xy, nb_inter_frame, supersampling)
     generate_images_from_hits(data_folder)
     generate_video_from_folder(data_folder, fps)

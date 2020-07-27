@@ -39,8 +39,13 @@ class FractalExplorer:
 
         self.itinary_path = pth(data_folder, "itinary.pkl")
         self.itinary = []
+        self.time_per_px = None
+
+        # run juliaset function once to compile them
+        juliaset.juliaset((1, 1), self.pos_julia_xy, self.zoom_julia, self.r_mat, self.pos_mandel_xy)
 
     def update_julia_hits(self):
+        tic = time.time()
         self.julia_hits = juliaset.juliaset(
             self.dim_xy,
             self.pos_julia_xy,
@@ -49,6 +54,8 @@ class FractalExplorer:
             self.pos_mandel_xy,
             fisheye_factor=self.fisheye_factor,
         )
+        W, H = self.dim_xy
+        self.time_per_px = (time.time()-tic) / (W*H)
 
     def update_mandel_hits(self):
         self.mandel_hits = juliaset.mandelbrotset(
@@ -155,6 +162,7 @@ class FractalExplorer:
                     "r_mat": self.r_mat,
                     "pos_mandel_xy": self.pos_mandel_xy,
                     "fisheye_factor": self.fisheye_factor,
+                    "time_per_px": self.time_per_px,
                 }
                 self.itinary.append(location)
                 print(self.itinary)

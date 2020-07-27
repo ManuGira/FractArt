@@ -2,6 +2,14 @@ import os
 import cv2 as cv
 import numpy as np
 
+
+def sec_to_hms(sec):
+    h = int(sec / 60 / 60)
+    m = int(sec / 60 - h * 60)
+    s = int(sec - h * 60 * 60 - m * 60)
+    return h, m, s
+
+
 def pth(*args):
     out = "."
     for arg in args:
