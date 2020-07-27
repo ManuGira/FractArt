@@ -25,6 +25,13 @@ def zoom_space_to_cartesian(x, y, z, cx, cy):
 
 
 @njit
+def apply_fisheye(x, y, z, fisheye_factor):
+    x1 = x
+    y1 = y
+    z1 = z + (x*x + y*y)*fisheye_factor
+    return x1, y1, z1
+
+@njit
 def apply_rotation(x, y, z, r_mat):
     x1 = x * r_mat[0, 0] + y * r_mat[0, 1] + z * r_mat[0, 2]
     y1 = x * r_mat[1, 0] + y * r_mat[1, 1] + z * r_mat[1, 2]
@@ -109,7 +116,7 @@ def cartesian_space_to_screen(dim_xy, pos_xy, zoom, r_mat, pos_cart_xy):
 
 
 @njit
-def screen_space_to_cartesian(dim_xy, pos_xy, zoom, r_mat, pos_screen_xy):
+def screen_space_to_cartesian(dim_xy, pos_xy, zoom, r_mat, pos_screen_xy, fisheye_factor=0):
     W, H = dim_xy
     pos_xyz = pos_xy + (zoom,)
     size = max(W, H)
@@ -120,13 +127,14 @@ def screen_space_to_cartesian(dim_xy, pos_xy, zoom, r_mat, pos_screen_xy):
     y = -1 + j * px_size
     x = -1 + i * px_size
     z = 0
+    x, y, z = apply_fisheye(x, y, z, fisheye_factor)
     x, y, z = apply_rotation(x, y, z, r_mat)
     x, y, z = apply_translation(x, y, z, pos_xyz)
     x, y = zoom_space_to_cartesian(x, y, z, pos_xyz[0], pos_xyz[1])
     return x, y
 
 @jit(nopython=True, parallel=True)
-def juliaset(dim_xy, pos_xy, zoom, r_mat, constant_xy, supersampling=1):
+def juliaset(dim_xy, pos_xy, zoom, r_mat, constant_xy, supersampling=1, fisheye_factor=0):
     max_iter = 1024
     W, H = dim_xy
     pos_xyz = pos_xy + (zoom,)
@@ -146,6 +154,7 @@ def juliaset(dim_xy, pos_xy, zoom, r_mat, constant_xy, supersampling=1):
                     y = -dy + j * px_size + super_j*sub_px_size
                     x = -dx + i * px_size + super_i*sub_px_size
                     z = 0
+                    x, y, z = apply_fisheye(x, y, z, fisheye_factor)
                     x, y, z = apply_rotation(x, y, z, r_mat)
                     x, y, z = apply_translation(x, y, z, pos_xyz)
                     x, y = zoom_space_to_cartesian(x, y, z, pos_xyz[0], pos_xyz[1])

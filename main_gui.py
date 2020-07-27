@@ -30,6 +30,7 @@ class FractalExplorer:
         self.delta_zoom_mandel = 5
         self.r_mat = r_mat
         self.pos_mandel_xy = constant_xy
+        self.fisheye_factor = 0.0
 
         self.pos_mouse_julia_xy = 0, 0
         self.pos_mouse_mandel_xy = 0, 0
@@ -45,7 +46,9 @@ class FractalExplorer:
             self.pos_julia_xy,
             self.zoom_julia,
             self.r_mat,
-            self.pos_mandel_xy)
+            self.pos_mandel_xy,
+            fisheye_factor=self.fisheye_factor,
+        )
 
     def update_mandel_hits(self):
         self.mandel_hits = juliaset.mandelbrotset(
@@ -97,7 +100,13 @@ class FractalExplorer:
             # mouse on juliaset
             self.pos_mouse_julia_screen_xy = x, y
             self.pos_mouse_julia_xy = juliaset.screen_space_to_cartesian(
-                self.dim_xy, self.pos_julia_xy, self.zoom_julia, self.r_mat, self.pos_mouse_julia_screen_xy)
+                self.dim_xy,
+                self.pos_julia_xy,
+                self.zoom_julia,
+                self.r_mat,
+                self.pos_mouse_julia_screen_xy,
+                self.fisheye_factor,
+            )
 
             if event == cv.EVENT_LBUTTONUP:
                 self.pos_julia_xy = self.pos_mouse_julia_xy
@@ -145,12 +154,17 @@ class FractalExplorer:
                     "zoom": self.zoom_julia,
                     "r_mat": self.r_mat,
                     "pos_mandel_xy": self.pos_mandel_xy,
+                    "fisheye_factor": self.fisheye_factor,
                 }
                 self.itinary.append(location)
                 print(self.itinary)
                 with open(self.itinary_path, "wb") as pickle_out:
                     pickle.dump(self.itinary, pickle_out)
 
+            if key in 'x':
+                self.fisheye_factor = (self.fisheye_factor+0.1+1)%2-1
+                self.update_julia_hits()
+                self.update_julia_display()
 
             if key in 'z':
                 self.zoom_julia += 1

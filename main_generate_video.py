@@ -8,7 +8,7 @@ import time
 
 
 
-def generate_video_from_folder(data_folder):
+def generate_video_from_folder(data_folder, fps):
     print("generate_video_from_folder: ", end="")
     tic = time.time()
 
@@ -19,7 +19,7 @@ def generate_video_from_folder(data_folder):
 
     # Define the codec and create VideoWriter object
     fourcc = cv.VideoWriter_fourcc(*'mp4v')  # Be sure to use lower case
-    out = cv.VideoWriter(video_path, fourcc, 60.0, (W, H))
+    out = cv.VideoWriter(video_path, fourcc, fps, (W, H))
 
     K = len(os.listdir(imgs_folder))
     for k in range(K):
@@ -64,18 +64,17 @@ def interpolate_locations(locA, locB, t):
         y = locA[keyword][1] * (1 - t) + t * locB[keyword][1]
         out[keyword] = x, y
 
-    for keyword in ["zoom", "r_mat"]:
+    for keyword in ["zoom", "r_mat", "fisheye_factor"]:
         out[keyword] = locA[keyword] * (1 - t) + t * locB[keyword]
 
     return out
 
 
-def generate_hits_from_itinary(data_folder):
+def generate_hits_from_itinary(data_folder, dim_xy, nb_inter_frame):
     print("generate_hits_from_itinary")
     tic = time.time()
 
-    nb_inter_frame = 60
-    dim_xy = (720, 540)
+
 
     with open(pth(data_folder, "itinary.pkl"), "rb") as pickle_in:
         itinary = pickle.load(pickle_in)
@@ -102,19 +101,24 @@ def generate_hits_from_itinary(data_folder):
                 location["zoom"],
                 location["r_mat"],
                 location["pos_mandel_xy"],
-                supersampling=3)
+                supersampling=1,
+                fisheye_factor=location["fisheye_factor"],
+            )
 
             with open(pth(hits_folder, f"{k}.pkl"), "wb") as pickle_out:
                 pickle.dump(julia_hits, pickle_out)
             k += 1
             print('.', end='')
-        print(" ")
-    print(f" {time.time()-tic:.4f}s")
+        print(f" {time.time()-tic:.4f}s")
 
 
 
 if __name__ == '__main__':
     data_folder = "output"
-    generate_hits_from_itinary(data_folder)
+    nb_inter_frame = 20
+    dim_xy = (720, 540)
+    fps = 30
+
+    generate_hits_from_itinary(data_folder, nb_inter_frame, dim_xy)
     generate_images_from_hits(data_folder)
-    generate_video_from_folder(data_folder)
+    generate_video_from_folder(data_folder, fps)
