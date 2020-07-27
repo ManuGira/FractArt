@@ -5,6 +5,7 @@ import time
 import pickle
 import fractal_painter
 from utils import pth
+import math3d
 # from threading import Thread
 
 # cv_process = Thread(target=pss.run, kwargs={"online": False})
@@ -31,6 +32,7 @@ class FractalExplorer:
         self.r_mat = r_mat
         self.pos_mandel_xy = constant_xy
         self.fisheye_factor = 0.0
+        self.r_angle = 0.0
 
         self.pos_mouse_julia_xy = 0, 0
         self.pos_mouse_mandel_xy = 0, 0
@@ -171,6 +173,12 @@ class FractalExplorer:
 
             if key in 'x':
                 self.fisheye_factor = (self.fisheye_factor+0.1+1)%2-1
+                self.update_julia_hits()
+                self.update_julia_display()
+
+            if key in 'c':
+                self.r_angle += 0.1
+                self.r_mat = math3d.axisAngle_to_Rmat([0,1,0], self.r_angle)
                 self.update_julia_hits()
                 self.update_julia_display()
 
