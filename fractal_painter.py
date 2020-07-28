@@ -19,12 +19,12 @@ def color_gradient(colors_bgr, length, interpolation=cv.INTER_LINEAR):
     return cv.resize(colors_bgr, dsize=(3, length), interpolation=interpolation)
 
 
-def color_map(hits):
+def color_map(hits, max_iter):
     # dB = lambda x: (20 * np.log(x + 1)).astype(np.uint16)
     # hits = dB(hits)
-    N = 1024
     # BRG colors
-    color_map_0 = color_gradient([
+    N = 8192
+    color_list = [
         [0, 0, 0],
         [255, 255, 95],
         [0, 0, 0],
@@ -32,7 +32,8 @@ def color_map(hits):
         [0, 0, 0],
         [127, 255, 255],
         [0, 0, 0],
-    ], N)
+    ]*8
+    color_map_0 = color_gradient(color_list, N)
     color_map_1 = color_gradient([
         [0, 0, 255],
         [255, 255, 255],

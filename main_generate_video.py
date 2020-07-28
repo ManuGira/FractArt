@@ -37,10 +37,9 @@ def generate_video_from_folder(data_folder, fps):
     out.release()
 
 
-def generate_images_from_hits(data_folder):
+def generate_images_from_hits(data_folder, max_iter):
     print("generate_images_from_hits: ", end="")
     tic = time.time()
-
 
     hits_folder = pth(data_folder, "hits")
     imgs_folder = pth(data_folder, "imgs")
@@ -51,7 +50,7 @@ def generate_images_from_hits(data_folder):
     for k in range(K):
         with open(pth(hits_folder, f"{k}.pkl"), "rb") as pickle_in:
             julia_hits = pickle.load(pickle_in)
-        julia_bgr = fractal_painter.color_map(julia_hits)
+        julia_bgr = fractal_painter.color_map(julia_hits, max_iter)
         julia_bgr = fractal_painter.glow_effect(julia_bgr)
         cv.imwrite(pth(imgs_folder, f"{k}.png"), julia_bgr)
         if ((100*k/K)//10) < ((100*(k+1)/K)//10):
@@ -79,11 +78,13 @@ def estimate_computation_time(itinary, dim_xy, nb_inter_frame, supersampling):
     avg_time_per_pixels = sum(time_per_pixels)/(len(time_per_pixels)-1)
     W, H = dim_xy
     out = avg_time_per_pixels * W*H * nb_inter_frame * (len(itinary)-1) * supersampling**2
-    # no idea why, but it works better by mutliplying by 0.7
-    return 0.7*out
+    return out
 
 
-def generate_hits_from_itinary(data_folder, dim_xy, nb_inter_frame, supersampling):
+def generate_hits_from_itinary(data_folder, dim_xy, nb_inter_frame, supersampling, max_iter):
+    # run juliaset function once to compile it
+    juliaset.juliaset((1, 1), (0, 0), 1, np.eye(3), (0, 0))
+
     print("generate_hits_from_itinary")
     tic0 = time.time()
 
@@ -116,6 +117,7 @@ def generate_hits_from_itinary(data_folder, dim_xy, nb_inter_frame, supersamplin
                 location["pos_mandel_xy"],
                 supersampling=supersampling,
                 fisheye_factor=location["fisheye_factor"],
+                max_iter=max_iter,
             )
 
             with open(pth(hits_folder, f"{k}.pkl"), "wb") as pickle_out:
@@ -129,11 +131,12 @@ def generate_hits_from_itinary(data_folder, dim_xy, nb_inter_frame, supersamplin
 
 if __name__ == '__main__':
     data_folder = "output"
-    dim_xy = (720, 540)
-    nb_inter_frame = 60
+    dim_xy = (900, 600) #(720, 540)
+    nb_inter_frame = 1
     supersampling = 3
+    max_iter = 8192
     fps = 60
 
-    generate_hits_from_itinary(data_folder, dim_xy, nb_inter_frame, supersampling)
-    generate_images_from_hits(data_folder)
-    generate_video_from_folder(data_folder, fps)
+    generate_hits_from_itinary(data_folder, dim_xy, nb_inter_frame, supersampling, max_iter)
+    generate_images_from_hits(data_folder, max_iter)
+    # generate_video_from_folder(data_folder, fps)

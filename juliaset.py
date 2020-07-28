@@ -61,11 +61,11 @@ def compute_julia_pixel(x, y, constant_xy, max_iter):
     return hit
 
 @njit
-def compute_mandelbrot_pixel(x, y):
+def compute_mandelbrot_pixel(x, y, max_iter):
     cx = x
     cy = y
     hit = 0
-    while x ** 2 + y ** 2 < 100 and hit < 1024:
+    while x ** 2 + y ** 2 < 100 and hit < max_iter:
         x0 = x
         y0 = y
         x1 = x0 ** 2 - y0 ** 2 + cx
@@ -133,9 +133,9 @@ def screen_space_to_cartesian(dim_xy, pos_xy, zoom, r_mat, pos_screen_xy, fishey
     x, y = zoom_space_to_cartesian(x, y, z, pos_xyz[0], pos_xyz[1])
     return x, y
 
+
 @jit(nopython=True, parallel=True)
-def juliaset(dim_xy, pos_xy, zoom, r_mat, constant_xy, supersampling=1, fisheye_factor=0):
-    max_iter = 1024
+def juliaset(dim_xy, pos_xy, zoom, r_mat, constant_xy, supersampling=1, fisheye_factor=0, max_iter=1024):
     W, H = dim_xy
     pos_xyz = pos_xy + (zoom,)
     size = max(W, H)
@@ -166,7 +166,7 @@ def juliaset(dim_xy, pos_xy, zoom, r_mat, constant_xy, supersampling=1, fisheye_
 
 
 @jit(nopython=True, parallel=True)
-def mandelbrotset(dim_xy, pos_xy, zoom, r_mat):
+def mandelbrotset(dim_xy, pos_xy, zoom, r_mat, max_iter=1024):
     W, H = dim_xy
     size = max(W, H)
     px_size = 2/size
@@ -184,7 +184,7 @@ def mandelbrotset(dim_xy, pos_xy, zoom, r_mat):
             x, y, z = apply_translation(x, y, z, pos_xyz)
             x, y = zoom_space_to_cartesian(x, y, z, pos_xyz[0], pos_xyz[1])
 
-            mandelbrot_hits[j, i] = compute_mandelbrot_pixel(x, y)
+            mandelbrot_hits[j, i] = compute_mandelbrot_pixel(x, y, max_iter)
     return mandelbrot_hits
 
 def get_initial_values():
