@@ -159,7 +159,7 @@ def juliaset(dim_xy, pos_xy, zoom, r_mat, constant_xy, supersampling=1, fisheye_
                     x, y, z = apply_translation(x, y, z, pos_xyz)
                     x, y = zoom_space_to_cartesian(x, y, z, pos_xyz[0], pos_xyz[1])
 
-                    hits = compute_julia_pixel(x, y, constant_xy, max_iter)
+                    hits = compute_julia_pixel(x, y, constant_xy, max_iter=min_hits)
                     min_hits = min(min_hits, hits)
             julia_hits[j, i] = min_hits
     return julia_hits
