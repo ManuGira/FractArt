@@ -1,7 +1,7 @@
 import numpy as np
 import time
 import utils
-from numba import njit, jit
+from numba import njit, jit, vectorize, guvectorize
 
 
 def compute_julia(mgx, mgy, c, max_iter=80):
@@ -59,6 +59,21 @@ def compute_julia_pixel(x, y, constant_xy, max_iter):
         y = y1
         hit += 1
     return hit
+
+
+@vectorize(['int64(float64, float64, float64, float64, int64)'], target="cpu")
+def compute_julia_pixel_cuda(x, y, constant_x, constant_y, max_iter):
+    hit = 0
+    while x ** 2 + y ** 2 < 100 and hit < max_iter:
+        x0 = x
+        y0 = y
+        x1 = x0 ** 2 - y0 ** 2 + constant_x
+        y1 = 2 * x0 * y0 + constant_y
+        x = x1
+        y = y1
+        hit += 1
+    return hit
+
 
 @njit
 def compute_mandelbrot_pixel(x, y, max_iter):
@@ -162,6 +177,37 @@ def juliaset(dim_xy, pos_xy, zoom, r_mat, constant_xy, supersampling=1, fisheye_
                     hits = compute_julia_pixel(x, y, constant_xy, max_iter=min_hits)
                     min_hits = min(min_hits, hits)
             julia_hits[j, i] = min_hits
+    return julia_hits
+
+
+@jit(nopython=True, parallel=True)
+def juliaset_cuda(dim_xy, pos_xy, zoom, r_mat, constant_xy, supersampling=1, fisheye_factor=0, max_iter=1024):
+    W, H = dim_xy
+    pos_xyz = pos_xy + (zoom,)
+    size = max(W, H)
+    px_size = 2 / size
+    sub_px_size = px_size / supersampling
+
+    dx = min(1.0, W / H)
+    dy = min(1.0, H / W)
+    julia_hits = np.zeros(shape=(H, W), dtype=np.int64) + max_iter
+    for super_j in range(supersampling):
+        for super_i in range(supersampling):
+            mesh_x = np.zeros(shape=(H, W), dtype=np.float64)
+            mesh_y = np.zeros(shape=(H, W), dtype=np.float64)
+            for j in range(H):
+                # print(100*j/H, "%")
+                for i in range(W):
+                    y = -dy + j * px_size + super_j * sub_px_size
+                    x = -dx + i * px_size + super_i * sub_px_size
+                    z = 0
+                    x, y, z = apply_fisheye(x, y, z, fisheye_factor)
+                    x, y, z = apply_rotation(x, y, z, r_mat)
+                    x, y, z = apply_translation(x, y, z, pos_xyz)
+                    x, y = zoom_space_to_cartesian(x, y, z, pos_xyz[0], pos_xyz[1])
+                    mesh_x[j, i] = x
+                    mesh_y[j, i] = y
+            julia_hits = compute_julia_pixel_cuda(mesh_x, mesh_y, constant_xy[0], constant_xy[1], julia_hits)
     return julia_hits
 
 
