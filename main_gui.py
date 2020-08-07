@@ -42,6 +42,7 @@ class FractalExplorer:
         self.itinary_path = pth(data_folder, "itinary.pkl")
         self.itinary = []
         self.time_per_px = None
+        self.max_iter = 1024
 
         # run juliaset function once to compile them
         juliaset.juliaset((1, 1), self.pos_julia_xy, self.zoom_julia, self.r_mat, self.pos_mandel_xy)
@@ -54,10 +55,15 @@ class FractalExplorer:
             self.zoom_julia,
             self.r_mat,
             self.pos_mandel_xy,
+            max_iter=self.max_iter,
             fisheye_factor=self.fisheye_factor,
         )
         W, H = self.dim_xy
-        self.time_per_px = (time.time()-tic) / (W*H)
+        N = W*H
+        n = np.count_nonzero(self.julia_hits == self.max_iter)
+        self.time_per_px = (time.time()-tic) / N
+        print((n*8192/self.max_iter + (N-n))/N)
+        self.time_per_px = self.time_per_px * ((8192/self.max_iter) * n + (N-n))/N
 
     def update_mandel_hits(self):
         self.mandel_hits = juliaset.mandelbrotset(
@@ -69,14 +75,14 @@ class FractalExplorer:
 
 
     def update_julia_display(self):
-        self.julia_display = fractal_painter.color_map(self.julia_hits)
+        self.julia_display = fractal_painter.color_map(self.julia_hits, self.max_iter)
         self.julia_display = fractal_painter.glow_effect(self.julia_display)
         H, W = self.julia_display.shape[:2]
         cv.line(self.julia_display, (W // 2, 48 * H // 100), (W // 2, 52 * H // 100), (0, 127, 127))
         cv.line(self.julia_display, (48 * W // 100, H // 2), (52 * W // 100, H // 2), (0, 127, 127))
 
     def update_mandel_display(self):
-        self.mandel_display = fractal_painter.color_map(self.mandel_hits)
+        self.mandel_display = fractal_painter.color_map(self.mandel_hits, self.max_iter)
         H, W = self.mandel_display.shape[:2]
         cv.line(self.mandel_display, (W//2, 48*H//100), (W//2, 52*H//100), (0, 127, 127))
         cv.line(self.mandel_display, (48*W//100, H//2), (52*W//100, H//2), (0, 127, 127))
@@ -214,6 +220,6 @@ def printPressedKey():
 
 if __name__ == '__main__':
     # printPressedKey()
-    data_folder = "output"
+    data_folder = "output2"
     main(data_folder)
 

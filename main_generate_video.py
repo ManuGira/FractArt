@@ -130,13 +130,31 @@ def generate_hits_from_itinary(data_folder, dim_xy, nb_inter_frame, supersamplin
 
 
 if __name__ == '__main__':
-    data_folder = "output"
-    dim_xy = (900, 600) #(720, 540)
-    nb_inter_frame = 1
-    supersampling = 3
-    max_iter = 8192
+    data_folder = "output2"
     fps = 60
+
+    MODE = ["sketchy", "video", "video HD", "poster"][1]
+    if MODE == "sketchy":
+        dim_xy = (72, 54)
+        nb_inter_frame = 10
+        supersampling = 1
+        max_iter = 1024
+    elif MODE == "video":
+        dim_xy = (720, 540)
+        nb_inter_frame = 30
+        supersampling = 3
+        max_iter = 8192
+    elif MODE == "video HD":
+        dim_xy = (1920, 1080)
+        nb_inter_frame = 60
+        supersampling = 3
+        max_iter = 8192
+    elif MODE == "poster":
+        dim_xy = (6000, 4500)
+        nb_inter_frame = 1
+        supersampling = 3
+        max_iter = 8192
 
     generate_hits_from_itinary(data_folder, dim_xy, nb_inter_frame, supersampling, max_iter)
     generate_images_from_hits(data_folder, max_iter)
-    # generate_video_from_folder(data_folder, fps)
+    generate_video_from_folder(data_folder, fps)
