@@ -45,11 +45,11 @@ class FractalExplorer:
         self.max_iter = 1024
 
         # run juliaset function once to compile them
-        juliaset.juliaset((1, 1), self.pos_julia_xy, self.zoom_julia, self.r_mat, self.pos_mandel_xy)
+        juliaset.juliaset_vectorized((1, 1), self.pos_julia_xy, self.zoom_julia, self.r_mat, self.pos_mandel_xy)
 
     def update_julia_hits(self):
         tic = time.time()
-        self.julia_hits = juliaset.juliaset(
+        self.julia_hits = juliaset.juliaset_vectorized(
             self.dim_xy,
             self.pos_julia_xy,
             self.zoom_julia,

@@ -83,7 +83,7 @@ def estimate_computation_time(itinary, dim_xy, nb_inter_frame, supersampling):
 
 def generate_hits_from_itinary(data_folder, dim_xy, nb_inter_frame, supersampling, max_iter):
     # run juliaset function once to compile it
-    juliaset.juliaset((1, 1), (0, 0), 1, np.eye(3), (0, 0))
+    juliaset.juliaset_njit((1, 1), (0, 0), 1, np.eye(3), (0, 0))
 
     print("generate_hits_from_itinary")
     tic0 = time.time()

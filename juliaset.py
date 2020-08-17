@@ -1,20 +1,7 @@
 import numpy as np
 import time
 import utils
-from numba import njit, jit, vectorize, guvectorize
-
-
-def compute_julia(mgx, mgy, c, max_iter=80):
-    height, width = mgx.shape
-    cc = complex(c[0], c[1])
-    mgc = mgx + mgy * 1j
-    julia_hits = np.zeros(shape=(height, width), dtype=np.uint8)
-    mask = abs(mgc) < 10
-    for k in range(max_iter):
-        mgc[mask] = mgc[mask] ** 2 + cc
-        mask = abs(mgc) < 10
-        julia_hits[mask] = julia_hits[mask] + 1
-    return julia_hits
+from numba import njit, jit, vectorize
 
 
 @njit
@@ -45,34 +32,6 @@ def apply_translation(x, y, z, pos_xyz):
     y1 = pos_xyz[1] + y
     z1 = pos_xyz[2] + z
     return x1, y1, z1
-
-
-@njit
-def compute_julia_pixel(x, y, constant_xy, max_iter):
-    hit = 0
-    while x ** 2 + y ** 2 < 100 and hit < max_iter:
-        x0 = x
-        y0 = y
-        x1 = x0 ** 2 - y0 ** 2 + constant_xy[0]
-        y1 = 2 * x0 * y0 + constant_xy[1]
-        x = x1
-        y = y1
-        hit += 1
-    return hit
-
-
-@vectorize(['int64(float64, float64, float64, float64, int64)'], target="cpu")
-def compute_julia_pixel_cuda(x, y, constant_x, constant_y, max_iter):
-    hit = 0
-    while x ** 2 + y ** 2 < 100 and hit < max_iter:
-        x0 = x
-        y0 = y
-        x1 = x0 ** 2 - y0 ** 2 + constant_x
-        y1 = 2 * x0 * y0 + constant_y
-        x = x1
-        y = y1
-        hit += 1
-    return hit
 
 
 @njit
@@ -149,8 +108,99 @@ def screen_space_to_cartesian(dim_xy, pos_xy, zoom, r_mat, pos_screen_xy, fishey
     return x, y
 
 
+@njit()
+def juliaset_none(dim_xy, pos_xy, zoom, r_mat, constant_xy, supersampling=1, fisheye_factor=0, max_iter=1024):
+    """
+    this is a fake julia function, just to measure the cpu time needed for computing the meshgrids
+    :return: None
+    """
+    W, H = dim_xy
+    pos_xyz = pos_xy + (zoom,)
+    size = max(W, H)
+    px_size = 2 / size
+    sub_px_size = px_size / supersampling
+
+    dx = min(1.0, W / H)
+    dy = min(1.0, H / W)
+    julia_hits = np.zeros(shape=(H, W), dtype=np.int32) + max_iter
+    for super_j in range(supersampling):
+        for super_i in range(supersampling):
+            mesh_x = np.zeros(shape=(H, W), dtype=np.float64)
+            mesh_y = np.zeros(shape=(H, W), dtype=np.float64)
+            for j in range(H):
+                # print(100*j/H, "%")
+                for i in range(W):
+                    y = -dy + j * px_size + super_j * sub_px_size
+                    x = -dx + i * px_size + super_i * sub_px_size
+                    z = 0
+                    x, y, z = apply_fisheye(x, y, z, fisheye_factor)
+                    x, y, z = apply_rotation(x, y, z, r_mat)
+                    x, y, z = apply_translation(x, y, z, pos_xyz)
+                    x, y = zoom_space_to_cartesian(x, y, z, pos_xyz[0], pos_xyz[1])
+                    mesh_x[j, i] = x
+                    mesh_y[j, i] = y
+    return julia_hits
+
+
+def compute_julia_numpy(mgx, mgy, c, max_iter):
+    height, width = mgx.shape
+    cc = complex(c[0], c[1])
+    mgc = mgx + mgy * 1j
+    julia_hits = np.zeros(shape=(height, width), dtype=np.uint8)
+    mask = abs(mgc) < 10
+    for k in range(max_iter):
+        mgc[mask] = mgc[mask] ** 2 + cc
+        mask = abs(mgc) < 10
+        julia_hits[mask] = julia_hits[mask] + 1
+    return julia_hits
+
+
+def juliaset_numpy(dim_xy, pos_xy, zoom, r_mat, constant_xy, supersampling=1, fisheye_factor=0, max_iter=1024):
+    W, H = dim_xy
+    pos_xyz = pos_xy + (zoom,)
+    size = max(W, H)
+    px_size = 2 / size
+    sub_px_size = px_size / supersampling
+
+    dx = min(1.0, W / H)
+    dy = min(1.0, H / W)
+    julia_hits = np.zeros(shape=(H, W), dtype=np.int32) + max_iter
+    for super_j in range(supersampling):
+        for super_i in range(supersampling):
+            mesh_x = np.zeros(shape=(H, W), dtype=np.float64)
+            mesh_y = np.zeros(shape=(H, W), dtype=np.float64)
+            for j in range(H):
+                # print(100*j/H, "%")
+                for i in range(W):
+                    y = -dy + j * px_size + super_j * sub_px_size
+                    x = -dx + i * px_size + super_i * sub_px_size
+                    z = 0
+                    x, y, z = apply_fisheye(x, y, z, fisheye_factor)
+                    x, y, z = apply_rotation(x, y, z, r_mat)
+                    x, y, z = apply_translation(x, y, z, pos_xyz)
+                    x, y = zoom_space_to_cartesian(x, y, z, pos_xyz[0], pos_xyz[1])
+                    mesh_x[j, i] = x
+                    mesh_y[j, i] = y
+            hits = compute_julia_numpy(mesh_x, mesh_y, constant_xy, max_iter)
+            julia_hits = np.min((julia_hits, hits), axis=0)
+    return julia_hits
+
+@njit
+def compute_julia_pixel(x, y, constant_xy, max_iter):
+    hit = 0
+    while x ** 2 + y ** 2 < 100 and hit < max_iter:
+        x0 = x
+        y0 = y
+        x1 = x0 ** 2 - y0 ** 2 + constant_xy[0]
+        y1 = 2 * x0 * y0 + constant_xy[1]
+        x = x1
+        y = y1
+        hit += 1
+    return hit
+
+
 @jit(nopython=True, parallel=True)
-def juliaset(dim_xy, pos_xy, zoom, r_mat, constant_xy, supersampling=1, fisheye_factor=0, max_iter=1024):
+def juliaset_njit(dim_xy, pos_xy, zoom, r_mat, constant_xy, supersampling=1, fisheye_factor=0, max_iter=1024):
     W, H = dim_xy
     pos_xyz = pos_xy + (zoom,)
     size = max(W, H)
@@ -162,6 +212,7 @@ def juliaset(dim_xy, pos_xy, zoom, r_mat, constant_xy, supersampling=1, fisheye_
 
     julia_hits = np.zeros(shape=(H, W), dtype=np.uint16)
     for j in range(H):
+        # print(100*j/H, "%")
         for i in range(W):
             min_hits = max_iter
             for super_j in range(supersampling):
@@ -180,8 +231,22 @@ def juliaset(dim_xy, pos_xy, zoom, r_mat, constant_xy, supersampling=1, fisheye_
     return julia_hits
 
 
+@vectorize(['int64(float64, float64, float64, float64, int64)'], target="cpu")
+def compute_julia_pixel_vectorized(x, y, constant_x, constant_y, max_iter):
+    hit = 0
+    while x ** 2 + y ** 2 < 100 and hit < max_iter:
+        x0 = x
+        y0 = y
+        x1 = x0 ** 2 - y0 ** 2 + constant_x
+        y1 = 2 * x0 * y0 + constant_y
+        x = x1
+        y = y1
+        hit += 1
+    return hit
+
+
 @jit(nopython=True, parallel=True)
-def juliaset_cuda(dim_xy, pos_xy, zoom, r_mat, constant_xy, supersampling=1, fisheye_factor=0, max_iter=1024):
+def juliaset_vectorized(dim_xy, pos_xy, zoom, r_mat, constant_xy, supersampling=1, fisheye_factor=0, max_iter=1024):
     W, H = dim_xy
     pos_xyz = pos_xy + (zoom,)
     size = max(W, H)
@@ -190,7 +255,7 @@ def juliaset_cuda(dim_xy, pos_xy, zoom, r_mat, constant_xy, supersampling=1, fis
 
     dx = min(1.0, W / H)
     dy = min(1.0, H / W)
-    julia_hits = np.zeros(shape=(H, W), dtype=np.int64) + max_iter
+    julia_hits = np.zeros(shape=(H, W), dtype=np.int32) + max_iter
     for super_j in range(supersampling):
         for super_i in range(supersampling):
             mesh_x = np.zeros(shape=(H, W), dtype=np.float64)
@@ -207,7 +272,7 @@ def juliaset_cuda(dim_xy, pos_xy, zoom, r_mat, constant_xy, supersampling=1, fis
                     x, y = zoom_space_to_cartesian(x, y, z, pos_xyz[0], pos_xyz[1])
                     mesh_x[j, i] = x
                     mesh_y[j, i] = y
-            julia_hits = compute_julia_pixel_cuda(mesh_x, mesh_y, constant_xy[0], constant_xy[1], julia_hits)
+            julia_hits = compute_julia_pixel_vectorized(mesh_x, mesh_y, constant_xy[0], constant_xy[1], julia_hits)
     return julia_hits
 
 
@@ -237,28 +302,22 @@ def get_initial_values():
     dim_xy = (500, 500)
     pos_julia_xy = (0, 0)
     zoom = 0
-    r_mat = np.array([
-        [1, 0, 0],
-        [0, 1, 0],
-        [0, 0, 1],
-    ])
+    r_mat = np.eye(3)
     constant_xy = (-0.8372, -0.1939)  # constant is the position xy of mandelbrot
     return dim_xy, pos_julia_xy, zoom, r_mat, constant_xy
 
 def main():
-    from numba.typed import List
-
     # juliaset((-1, 0), (-0.8372, -0.1939), (1000, 1000), 0.5)
     dim_xy = (1000, 1000)
 
-    juliaset((1, 1),
-             (0, 0, -10),
-             np.array([
+    juliaset_njit((1, 1),
+                  (0, 0, -10),
+                  np.array([
                 [1, 0, 0],
                 [0, 1, 0],
                 [0, 0, 1],
              ]),
-             (-0.8372, -0.1939))
+                  (-0.8372, -0.1939))
     totic = 0
     for zoom in range(20):
         pos_julia_xy = (0, 0)
@@ -270,7 +329,7 @@ def main():
         constant_xy = (-0.8372, -0.1939)
 
         tic = time.time()
-        julia_hits = juliaset(dim_xy, pos_julia_xy, zoom, r_mat, constant_xy)
+        julia_hits = juliaset_njit(dim_xy, pos_julia_xy, zoom, r_mat, constant_xy)
         tac = time.time()
         totic += tac-tic
         print(zoom, "elapsed time: ", tac - tic, "s")
@@ -278,9 +337,9 @@ def main():
         utils.export_to_png(f"zoom/juliaset_{zoom}", julia_hits)
     print("total time: ", totic, "s")
 
-
     # jit 18.00 s
     # njit 18.00 s
+
 
 if __name__ == '__main__':
     main()
