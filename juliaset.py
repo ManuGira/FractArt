@@ -150,7 +150,7 @@ def compute_julia_numpy(mgx, mgy, c, max_iter):
     mask = abs(mgc) < 10
     for k in range(max_iter):
         mgc[mask] = mgc[mask] ** 2 + cc
-        mask = abs(mgc) < 10
+        mask = abs(mgc) < 2
         julia_hits[mask] = julia_hits[mask] + 1
     return julia_hits
 
@@ -188,13 +188,13 @@ def juliaset_numpy(dim_xy, pos_xy, zoom, r_mat, constant_xy, supersampling=1, fi
 @njit
 def compute_julia_pixel(x, y, constant_xy, max_iter):
     hit = 0
-    while x ** 2 + y ** 2 < 100 and hit < max_iter:
-        x0 = x
-        y0 = y
-        x1 = x0 ** 2 - y0 ** 2 + constant_xy[0]
-        y1 = 2 * x0 * y0 + constant_xy[1]
-        x = x1
-        y = y1
+    x2 = x * x
+    y2 = y * y
+    while x2 + y2 < 4 and hit < max_iter:
+        y = (x+x) * y + constant_xy[1]
+        x = x2 - y2 + constant_xy[0]
+        y2 = y*y
+        x2 = x*x
         hit += 1
     return hit
 
@@ -234,13 +234,13 @@ def juliaset_njit(dim_xy, pos_xy, zoom, r_mat, constant_xy, supersampling=1, fis
 @vectorize(['int64(float64, float64, float64, float64, int64)'], target="cpu")
 def compute_julia_pixel_vectorized(x, y, constant_x, constant_y, max_iter):
     hit = 0
-    while x ** 2 + y ** 2 < 100 and hit < max_iter:
-        x0 = x
-        y0 = y
-        x1 = x0 ** 2 - y0 ** 2 + constant_x
-        y1 = 2 * x0 * y0 + constant_y
-        x = x1
-        y = y1
+    x2 = x * x
+    y2 = y * y
+    while x2 + y2 < 4 and hit < max_iter:
+        y = (x+x) * y + constant_y
+        x = x2 - y2 + constant_x
+        y2 = y*y
+        x2 = x*x
         hit += 1
     return hit
 
