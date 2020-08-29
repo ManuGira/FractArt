@@ -69,6 +69,56 @@ def cvtHLScube_to_BGR(hls):
     bgr = cv.cvtColor(hls, cv.COLOR_HLS2BGR)
     return bgr
 
+
+def neon_effect2(hits, colors, brigther_factor=2, glow_size1=3):
+    H, W, = hits.shape
+    mask_bgr = np.zeros(shape=(H, W, 3), dtype=np.uint16)
+
+    for color in colors:
+        color_bgr = color['bgr']
+        level = color['level']
+        width = color['width']
+
+        hls = cv.cvtColor(np.array([[color_bgr]], dtype=np.uint8), cv.COLOR_BGR2HLS)  # uint8 (1x1x3)
+        hls = hls.squeeze()
+
+        mask_gray = np.zeros(shape=(H, W), dtype=np.uint8)
+        mask = np.logical_and(level - width < hits, hits < level + width)
+        mask_gray[mask] = hls[1]
+        mask_bgr[:, :, 0][mask] += color_bgr[0]
+        mask_bgr[:, :, 1][mask] += color_bgr[1]
+        mask_bgr[:, :, 2][mask] += color_bgr[2]
+
+    mask_bgr[mask_bgr > 255] = 255
+    mask_bgr = mask_bgr.astype(np.uint8)
+    mask_hls = cv.cvtColor(mask_bgr, cv.COLOR_BGR2HLS)
+
+    light = mask_hls[:, :, 2].astype(np.uint16)*brigther_factor
+    glow = mask_bgr.copy()
+    mask_bgr = mask_bgr.astype(np.uint16)
+    K = 10
+    for k in range(K):
+        glow = cv.GaussianBlur(glow, ksize=(0, 0), sigmaX=glow_size1, sigmaY=0)
+        mask_bgr += glow
+        light += cv.cvtColor(glow, cv.COLOR_BGR2GRAY)
+    mask_bgr = mask_bgr / (K+1)
+    mask_hls = cv.cvtColor(mask_bgr.astype(np.uint8), cv.COLOR_BGR2HLS)
+
+    light = light // brigther_factor
+    light[light > 255] = 255
+    light = light.astype(np.uint8)
+
+    # bgr to hls, shape (1,1,3)
+    mask_hls[:, :, 1] = light
+
+
+    light.shape += (1,)
+    mask_bgra = np.concatenate((
+        cv.cvtColor(mask_hls, cv.COLOR_HLS2BGR),
+        light,
+    ), axis=2)
+    return mask_bgra
+
 def neon_effect(hits, level, color_bgr, width=200, brigther_factor=10, glow_size1=3):
     H, W, = hits.shape
     mask_gray = np.zeros(shape=(H, W), dtype=np.uint8)
@@ -174,34 +224,36 @@ def main():
     cur1, width1, cur2, width2 = 0, 0, 0, 0
     while True:
         tic = time.time()
-        red_bgra = neon_effect(
+        colors = [
+            {"bgr": [0, 0, 255], 'level': cur1, "width": width1},
+            {"bgr": [0, 255, 255], 'level': cur2, "width": width2},
+        ]
+        red_bgra = neon_effect2(
             julia_hits,
-            level=cur1,
-            width=width1,
-            color_bgr=[62, 0, 255],
+            colors,
         )
-        blue_bgra = neon_effect(
-            julia_hits,
-            level=cur2,
-            width=width2,
-            color_bgr=[255, 0, 62],
-        )
+        # blue_bgra = neon_effect(
+        #     julia_hits,
+        #     level=cur2,
+        #     width=width2,
+        #     color_bgr=[255, 0, 62],
+        # )
+        #
+        # green_bgra = neon_effect(
+        #     julia_hits,
+        #     level=cur2*2,
+        #     width=width1,
+        #     color_bgr=[0, 1, 0],
+        # )
 
-        green_bgra = neon_effect(
-            julia_hits,
-            level=cur2*2,
-            width=width1,
-            color_bgr=[0, 1, 0],
-        )
-
-        julia_bgr = blend([red_bgra, blue_bgra, green_bgra])
-        print(int(1000*(time.time()-tic)))
+        # julia_bgr = blend([red_bgra, blue_bgra, green_bgra])
+        # print(int(1000*(time.time()-tic)))
         # julia_bgr = red.astype(float) + blue.astype(float)
         # julia_bgr[julia_bgr > 255] = 255
         # julia_bgr = julia_bgr.astype(np.uint8)
 
 
-        cv.imshow('image', julia_bgr)
+        cv.imshow('image', red_bgra[:,:])
         k = cv.waitKey(10) & 0xFF
         if k == 27:  # esc
             break

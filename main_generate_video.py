@@ -11,6 +11,8 @@ import numpy as np
 
 
 def generate_video_from_folder(data_folder, fps):
+    if fps <= 0:
+        print("fps must be a positive number")
     print("generate_video_from_folder: ", end="")
     tic = time.time()
 
@@ -50,8 +52,16 @@ def generate_images_from_hits(data_folder, max_iter):
     for k in range(K):
         with open(pth(hits_folder, f"{k}.pkl"), "rb") as pickle_in:
             julia_hits = pickle.load(pickle_in)
-        julia_bgr = fractal_painter.color_map(julia_hits, max_iter)
-        julia_bgr = fractal_painter.glow_effect(julia_bgr)
+
+        # julia_bgr = fractal_painter.color_map(julia_hits, max_iter)
+        # julia_bgr = fractal_painter.glow_effect(julia_bgr)
+
+        colors = [
+            {"bgr": [127, 0, 255], 'level': (3*k)%1500, "width": 30},
+            {"bgr": [255, 0, 64], 'level': (3*k+512)%1500, "width": 30},
+        ]
+        julia_bgr = fractal_painter.neon_effect2(julia_hits, colors)
+
         cv.imwrite(pth(imgs_folder, f"{k}.png"), julia_bgr)
         if ((100*k/K)//10) < ((100*(k+1)/K)//10):
             print("X", end="")
@@ -65,9 +75,9 @@ def interpolate_locations(locA, locB, t):
         y = locA[keyword][1] * (1 - t) + t * locB[keyword][1]
         out[keyword] = x, y
 
-    for keyword in ["zoom", "r_mat", "fisheye_factor"]:
+    for keyword in ["zoom", "fisheye_factor"]:  #, "r_mat",]:
         out[keyword] = locA[keyword] * (1 - t) + t * locB[keyword]
-
+    out["r_mat"] = np.eye(4)
     return out
 
 
@@ -106,20 +116,32 @@ def generate_hits_from_itinary(data_folder, dim_xy, nb_inter_frame, supersamplin
         tic1 = time.time()
         locA = itinary[i]
         locB = itinary[i+1]
+        print(locB)
         for j in range(nb_inter_frame):
             t = j/nb_inter_frame
             location = interpolate_locations(locA, locB, t)
-            julia_hits = juliaset.juliaset(
-                dim_xy,
-                location["pos_julia_xy"],
-                location["zoom"],
-                location["r_mat"],
-                location["pos_mandel_xy"],
-                supersampling=supersampling,
-                fisheye_factor=location["fisheye_factor"],
-                max_iter=max_iter,
-            )
-
+            if False:
+                julia_hits = juliaset.juliaset_njit(
+                    dim_xy,
+                    location["pos_julia_xy"],
+                    location["zoom"],
+                    location["r_mat"],
+                    location["pos_mandel_xy"],
+                    supersampling=supersampling,
+                    fisheye_factor=location["fisheye_factor"],
+                    max_iter=max_iter,
+                )
+            else:
+                julia_hits = juliaset.juliaset_vectorized(
+                    dim_xy,
+                    location["pos_julia_xy"],
+                    location["zoom"],
+                    location["r_mat"],
+                    location["pos_mandel_xy"],
+                    supersampling=supersampling,
+                    fisheye_factor=location["fisheye_factor"],
+                    max_iter=max_iter,
+                )
             with open(pth(hits_folder, f"{k}.pkl"), "wb") as pickle_out:
                 pickle.dump(julia_hits, pickle_out)
             k += 1
@@ -128,32 +150,40 @@ def generate_hits_from_itinary(data_folder, dim_xy, nb_inter_frame, supersamplin
     print(f"Total time: {time.time()-tic0:.1f}s")
 
 
-
 if __name__ == '__main__':
     data_folder = "output2"
-    fps = 60
 
-    MODE = ["sketchy", "video", "video HD", "poster"][1]
+    MODE = ["sketchy", "video", "video HD", "poster"][0]
     if MODE == "sketchy":
         dim_xy = (72, 54)
         nb_inter_frame = 10
         supersampling = 1
         max_iter = 1024
+        fps = 10
     elif MODE == "video":
         dim_xy = (720, 540)
         nb_inter_frame = 30
         supersampling = 3
         max_iter = 8192
+        fps = 30
     elif MODE == "video HD":
         dim_xy = (1920, 1080)
         nb_inter_frame = 60
         supersampling = 3
         max_iter = 8192
+        fps = 60
     elif MODE == "poster":
         dim_xy = (6000, 4500)
         nb_inter_frame = 1
         supersampling = 3
         max_iter = 8192
+        fps = 0
+    else:
+        dim_xy = (1, 1)
+        nb_inter_frame = 1
+        supersampling = 1
+        max_iter = 1
+        fps = 0
 
     generate_hits_from_itinary(data_folder, dim_xy, nb_inter_frame, supersampling, max_iter)
     generate_images_from_hits(data_folder, max_iter)
