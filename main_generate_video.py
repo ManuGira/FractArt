@@ -7,7 +7,21 @@ import os
 import cv2 as cv
 import time
 import numpy as np
+import scipy.io.wavfile
 
+
+def load_sound_command(fps):
+    sr, cmd = scipy.io.wavfile.read('sounds/Synthwave_200627.wav')
+    cmd = np.max(np.abs(cmd), axis=1)
+
+    block_size = int(round(sr/fps))
+    length = len(cmd)
+    block_nb = (length//block_size)
+    cmd = cmd[:block_nb*block_size]
+    cmd = np.reshape(cmd, newshape=(block_nb, block_size))
+    cmd = np.max(cmd, axis=1)
+    cmd = cmd.astype(np.float)/(2**15-1)
+    return cmd
 
 
 def generate_video_from_folder(data_folder, fps):
@@ -185,6 +199,7 @@ if __name__ == '__main__':
         max_iter = 1
         fps = 0
 
+    cmd = load_sound_command(fps)
     generate_hits_from_itinary(data_folder, dim_xy, nb_inter_frame, supersampling, max_iter)
     generate_images_from_hits(data_folder, max_iter)
     generate_video_from_folder(data_folder, fps)
