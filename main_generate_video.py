@@ -53,7 +53,7 @@ def generate_video_from_folder(data_folder, fps):
     out.release()
 
 
-def generate_images_from_hits(data_folder, max_iter):
+def generate_images_from_hits(data_folder, full_itinary, max_iter):
     print("generate_images_from_hits: ", end="")
     tic = time.time()
 
@@ -70,9 +70,12 @@ def generate_images_from_hits(data_folder, max_iter):
         # julia_bgr = fractal_painter.color_map(julia_hits, max_iter)
         # julia_bgr = fractal_painter.glow_effect(julia_bgr)
 
+        loc = full_itinary[k]
+        width = 20 + 10*loc["cmd"]
+
         colors = [
-            {"bgr": [127, 0, 255], 'level': (3*k)%1500, "width": 30},
-            {"bgr": [255, 0, 64], 'level': (3*k+512)%1500, "width": 30},
+            {"bgr": [127, 0, 255], 'level': (3*k)%1500, "width": width},
+            {"bgr": [255, 0, 64], 'level': (3*k+512)%1500, "width": width},
         ]
         julia_bgr = fractal_painter.neon_effect2(julia_hits, colors)
 
@@ -105,101 +108,138 @@ def estimate_computation_time(itinary, dim_xy, nb_inter_frame, supersampling):
     return out
 
 
-def generate_hits_from_itinary(data_folder, dim_xy, nb_inter_frame, supersampling, max_iter):
-    # run juliaset function once to compile it
-    juliaset.juliaset_njit((1, 1), (0, 0), 1, np.eye(3), (0, 0))
-
-    print("generate_hits_from_itinary")
+def generate_full_itinary(data_folder, cmd, fps):
+    print("generate_full_itinary")
     tic0 = time.time()
 
     with open(pth(data_folder, "itinary.pkl"), "rb") as pickle_in:
         itinary = pickle.load(pickle_in)
 
-    print(f"Itinary made of {len(itinary)} locations interpolated by {nb_inter_frame} frames -> total = {(len(itinary)-1)*nb_inter_frame} frames")
-    estimated_time = estimate_computation_time(itinary, dim_xy, nb_inter_frame, supersampling)
-    eh, em, es = utils.sec_to_hms(estimated_time)
-    print(f"estimated computation time: {eh}h {em}m {es}s")
+    nb_block = len(cmd)
+    # index of itinaries, except first and last ones
+    itinary_at_samples = [2073661, 3915919, 4792857, 5000000, 6474654]
+    itinary_at_frame = [sample//48000 for sample in itinary_at_samples]  # TODO: recover 48000 from somewhere
+    itinary_at_frame = [0] + itinary_at_frame + [nb_block-1]
+
+    if len(itinary) != len(itinary_at_frame):
+        print("Error")
+        raise Exception  # TODO: raise something
+
+    k = 0
+    locations = []
+    prev_loc = itinary[0]
+    for i in range(len(itinary) - 1):
+        locA = itinary[i]
+        locB = itinary[i + 1]
+        frameA = itinary_at_frame[i]
+        frameB = itinary_at_frame[i + 1]
+        nb_inter_frame = frameB-frameA
+        for j in range(nb_inter_frame):
+            t = j / nb_inter_frame
+            loc = interpolate_locations(locA, locB, t)
+            loc["cmd"] = cmd[k]
+
+            xyz0 = np.append(loc["pos_julia_xy"], loc["zoom"])
+            xyz1 = np.append(prev_loc["pos_julia_xy"], prev_loc["zoom"])
+            velocity = np.sum((xyz1-xyz0)**2)**0.5*fps
+            loc["fisheye"] = -velocity
+
+            locations.append(loc)
+            prev_loc = loc.copy()
+            k += 1
+    return locations
+
+
+
+def generate_hits_from_itinary(data_folder, dim_xy, full_itinary, supersampling, max_iter):
+    # run juliaset function once to compile it
+    # juliaset.juliaset_njit((1, 1), (0, 0), 1, np.eye(3), (0, 0))
+    juliaset.juliaset_vectorized((1, 1), (0, 0), 1, np.eye(3), (0, 0))
+
+    print("generate_hits_from_itinary")
+    tic0 = time.time()
+
+    # estimated_time = estimate_computation_time(itinary, dim_xy, nb_inter_frame, supersampling)
+    # eh, em, es = utils.sec_to_hms(estimated_time)
+    # print(f"estimated computation time: {eh}h {em}m {es}s")
 
     hits_folder = pth(data_folder, "hits")
     if not os.path.exists(hits_folder):
         os.makedirs(hits_folder)
 
     k = 0
-    for i in range(len(itinary)-1):
-        print(f"{i} ", end="")
+    N = len(full_itinary)
+    for i in range(N - 1):
+        print(f"{i}/{N}: ", end="")
         tic1 = time.time()
-        locA = itinary[i]
-        locB = itinary[i+1]
-        print(locB)
-        for j in range(nb_inter_frame):
-            t = j/nb_inter_frame
-            location = interpolate_locations(locA, locB, t)
-            if False:
-                julia_hits = juliaset.juliaset_njit(
-                    dim_xy,
-                    location["pos_julia_xy"],
-                    location["zoom"],
-                    location["r_mat"],
-                    location["pos_mandel_xy"],
-                    supersampling=supersampling,
-                    fisheye_factor=location["fisheye_factor"],
-                    max_iter=max_iter,
-                )
-            else:
-                julia_hits = juliaset.juliaset_vectorized(
-                    dim_xy,
-                    location["pos_julia_xy"],
-                    location["zoom"],
-                    location["r_mat"],
-                    location["pos_mandel_xy"],
-                    supersampling=supersampling,
-                    fisheye_factor=location["fisheye_factor"],
-                    max_iter=max_iter,
-                )
-            with open(pth(hits_folder, f"{k}.pkl"), "wb") as pickle_out:
-                pickle.dump(julia_hits, pickle_out)
-            k += 1
-            print('.', end='')
-        print(f" {time.time()-tic1:.4f}s")
+        loc = full_itinary[i]
+        if False:
+            julia_hits = juliaset.juliaset_njit(
+                dim_xy,
+                loc["pos_julia_xy"],
+                loc["zoom"],
+                loc["r_mat"],
+                loc["pos_mandel_xy"],
+                supersampling=supersampling,
+                fisheye_factor=loc["fisheye_factor"],
+                max_iter=max_iter,
+            )
+        else:
+            julia_hits = juliaset.juliaset_vectorized(
+                dim_xy,
+                loc["pos_julia_xy"],
+                loc["zoom"],
+                loc["r_mat"],
+                loc["pos_mandel_xy"],
+                supersampling=supersampling,
+                fisheye_factor=loc["fisheye_factor"],
+                max_iter=max_iter,
+            )
+        with open(pth(hits_folder, f"{k}.pkl"), "wb") as pickle_out:
+            pickle.dump(julia_hits, pickle_out)
+        k += 1
+        print(f" {time.time()-tic1:.4f}s", flush=True)
     print(f"Total time: {time.time()-tic0:.1f}s")
 
 
 if __name__ == '__main__':
     data_folder = "output2"
 
-    MODE = ["sketchy", "video", "video HD", "poster"][0]
+    MODE = ["sketchy", "video LD", "video", "video HD", "poster"][1]
     if MODE == "sketchy":
         dim_xy = (72, 54)
         nb_inter_frame = 10
         supersampling = 1
         max_iter = 1024
         fps = 10
+    elif MODE == "video LD":
+        dim_xy = (720, 540)
+        supersampling = 1
+        max_iter = 8192
+        fps = 10
     elif MODE == "video":
         dim_xy = (720, 540)
-        nb_inter_frame = 30
         supersampling = 3
         max_iter = 8192
         fps = 30
     elif MODE == "video HD":
         dim_xy = (1920, 1080)
-        nb_inter_frame = 60
         supersampling = 3
         max_iter = 8192
         fps = 60
     elif MODE == "poster":
         dim_xy = (6000, 4500)
-        nb_inter_frame = 1
         supersampling = 3
         max_iter = 8192
         fps = 0
     else:
         dim_xy = (1, 1)
-        nb_inter_frame = 1
         supersampling = 1
         max_iter = 1
         fps = 0
 
     cmd = load_sound_command(fps)
-    generate_hits_from_itinary(data_folder, dim_xy, nb_inter_frame, supersampling, max_iter)
-    generate_images_from_hits(data_folder, max_iter)
+    full_itinary = generate_full_itinary(data_folder, cmd, fps)
+    generate_hits_from_itinary(data_folder, dim_xy, full_itinary, supersampling, max_iter)
+    generate_images_from_hits(data_folder, full_itinary, max_iter)
     generate_video_from_folder(data_folder, fps)
