@@ -231,6 +231,7 @@ def juliaset_njit(dim_xy, pos_xy, zoom, r_mat, constant_xy, supersampling=1, fis
     return julia_hits
 
 
+# @vectorize(['int64(float64, float64, float64, float64, int64)'], target="cuda")
 @vectorize(['int64(float64, float64, float64, float64, int64)'], target="cpu")
 def compute_julia_pixel_vectorized(x, y, constant_x, constant_y, max_iter):
     hit = 0
@@ -244,8 +245,8 @@ def compute_julia_pixel_vectorized(x, y, constant_x, constant_y, max_iter):
         hit += 1
     return hit
 
-
-@jit(nopython=True, parallel=True)
+# comment decorator for cuda
+@jit(parallel=True, target='cpu')
 def juliaset_vectorized(dim_xy, pos_xy, zoom, r_mat, constant_xy, supersampling=1, fisheye_factor=0, max_iter=1024):
     W, H = dim_xy
     pos_xyz = pos_xy + (zoom,)
@@ -253,9 +254,11 @@ def juliaset_vectorized(dim_xy, pos_xy, zoom, r_mat, constant_xy, supersampling=
     px_size = 2 / size
     sub_px_size = px_size / supersampling
 
+    constant_xy = [float(c) for c in constant_xy]
+
     dx = min(1.0, W / H)
     dy = min(1.0, H / W)
-    julia_hits = np.zeros(shape=(H, W), dtype=np.int32) + max_iter
+    julia_hits = np.zeros(shape=(H, W), dtype=np.int64) + max_iter
     for super_j in range(supersampling):
         for super_i in range(supersampling):
             mesh_x = np.zeros(shape=(H, W), dtype=np.float64)
