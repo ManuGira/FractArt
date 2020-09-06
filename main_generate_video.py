@@ -8,26 +8,29 @@ import cv2 as cv
 import time
 import numpy as np
 import scipy.io.wavfile
+import sound_itinary_planner
 
 
-def load_sound_command(fps):
-    sr, cmd = scipy.io.wavfile.read('sounds/Synthwave_200627.wav')
-    cmd = np.max(np.abs(cmd), axis=1)
+def progression_bar(k, K):
+    modA = 10
+    modB = 100
 
-    block_size = int(round(sr/fps))
-    length = len(cmd)
-    block_nb = (length//block_size)
-    cmd = cmd[:block_nb*block_size]
-    cmd = np.reshape(cmd, newshape=(block_nb, block_size))
-    cmd = np.max(cmd, axis=1)
-    cmd = cmd.astype(np.float)/(2**15-1)
-    return cmd
+    modA, modB = min(modA, modB), max(modA, modB)
 
+    # if ((100 * k / K) // 10) < ((100 * (k + 1) / K) // 10):
+    modX = lambda x, X, m: (m*x) // X
+
+    condA = modX(k, K, modA) < modX(k+1, K, modA)
+    condB = modX(k, K, modB) < modX(k+1, K, modB)
+    if condA:
+        print("X", end="", flush=True)
+    elif condB:
+        print(".", end="", flush=True)
 
 def generate_video_from_folder(data_folder, fps):
     if fps <= 0:
         print("fps must be a positive number")
-    print("generate_video_from_folder: ", end="")
+    print("generate_video_from_folder: ")
     tic = time.time()
 
     imgs_folder = pth(data_folder, "imgs")
@@ -40,14 +43,21 @@ def generate_video_from_folder(data_folder, fps):
     out = cv.VideoWriter(video_path, fourcc, fps, (W, H))
 
     K = len(os.listdir(imgs_folder))
+    frame_prev = img0*0
+    t = 5
     for k in range(K):
         image_path = pth(imgs_folder, f"{k}.png")
+
         frame = cv.imread(image_path)
+
+        # video post processing
+        frame = frame-(frame//t) + (frame_prev//t)
+        # frame = cv.addWeighted(frame, t, frame_prev, 1-t, 0)
+        frame_prev = frame.copy()
 
         out.write(frame)  # Write out frame to video
 
-        if ((100 * k / K) // 10) < ((100 * (k + 1) / K) // 10):
-            print("X", end="")
+        progression_bar(k, K)
     print(f" {time.time()-tic:.4f}s")
     # Release everything if job is finished
     out.release()
@@ -103,19 +113,6 @@ def generate_images_from_hits(data_folder, full_itinary, fps):
     print(f" {time.time()-tic:.4f}s")
 
 
-def interpolate_locations(locA, locB, t):
-    out = {}
-    for keyword in ["pos_julia_xy", "pos_mandel_xy"]:
-        x = locA[keyword][0] * (1 - t) + t * locB[keyword][0]
-        y = locA[keyword][1] * (1 - t) + t * locB[keyword][1]
-        out[keyword] = x, y
-
-    for keyword in ["zoom", "fisheye_factor"]:  #, "r_mat",]:
-        out[keyword] = locA[keyword] * (1 - t) + t * locB[keyword]
-    out["r_mat"] = np.eye(4)
-    return out
-
-
 def estimate_computation_time(itinary, dim_xy, nb_inter_frame, supersampling):
     time_per_pixels = [location["time_per_px"] for location in itinary]
     time_per_pixels[0] *= 0.5
@@ -124,49 +121,6 @@ def estimate_computation_time(itinary, dim_xy, nb_inter_frame, supersampling):
     W, H = dim_xy
     out = avg_time_per_pixels * W*H * nb_inter_frame * (len(itinary)-1) * supersampling**2
     return out
-
-
-def generate_full_itinary(data_folder, cmd, fps):
-    print("generate_full_itinary")
-    tic0 = time.time()
-
-    with open(pth(data_folder, "itinary.pkl"), "rb") as pickle_in:
-        itinary = pickle.load(pickle_in)
-
-    nb_block = len(cmd)
-    # index of itinaries, except first and last ones
-    itinary_at_samples = [2073661, 3915919, 4792857, 5000000, 6474654]
-    itinary_at_frame = [sample//48000 for sample in itinary_at_samples]  # TODO: recover 48000 from somewhere
-    itinary_at_frame = [0] + itinary_at_frame + [nb_block-1]
-
-    if len(itinary) != len(itinary_at_frame):
-        print("Error")
-        raise Exception  # TODO: raise something
-
-    k = 0
-    locations = []
-    prev_loc = itinary[0]
-    for i in range(len(itinary) - 1):
-        locA = itinary[i]
-        locB = itinary[i + 1]
-        frameA = itinary_at_frame[i]
-        frameB = itinary_at_frame[i + 1]
-        nb_inter_frame = frameB-frameA
-        for j in range(nb_inter_frame):
-            t = j / nb_inter_frame
-            loc = interpolate_locations(locA, locB, t)
-            loc["cmd"] = cmd[k]
-
-            xyz0 = np.append(loc["pos_julia_xy"], loc["zoom"])
-            xyz1 = np.append(prev_loc["pos_julia_xy"], prev_loc["zoom"])
-            velocity = np.sum((xyz1-xyz0)**2)**0.5*fps
-            loc["fisheye"] = -velocity
-
-            locations.append(loc)
-            prev_loc = loc.copy()
-            k += 1
-    return locations
-
 
 
 def generate_hits_from_itinary(data_folder, dim_xy, full_itinary, supersampling, max_iter):
@@ -219,14 +173,12 @@ def generate_hits_from_itinary(data_folder, dim_xy, full_itinary, supersampling,
         print(f" {time.time()-tic1:.4f}s", flush=True)
     print(f"Total time: {time.time()-tic0:.1f}s")
 
-
-if __name__ == '__main__':
-    data_folder = "output2"
+def main():
+    data_folder = "output3"
 
     MODE = ["sketchy", "video LD", "video", "video HD", "poster"][1]
     if MODE == "sketchy":
         dim_xy = (72, 54)
-        nb_inter_frame = 10
         supersampling = 1
         max_iter = 1024
         fps = 10
@@ -256,8 +208,10 @@ if __name__ == '__main__':
         max_iter = 1
         fps = 0
 
-    cmd = load_sound_command(fps)
-    full_itinary = generate_full_itinary(data_folder, cmd, fps)
-    generate_hits_from_itinary(data_folder, dim_xy, full_itinary, supersampling, max_iter)
-    generate_images_from_hits(data_folder, full_itinary, max_iter)
+    itinary = sound_itinary_planner.Itinary(sound_itinary_planner.AnotherPlanetMap(), fps)
+    generate_hits_from_itinary(data_folder, dim_xy, itinary.full_itinary, supersampling, max_iter)
+    generate_images_from_hits(data_folder, itinary.full_itinary, max_iter, fps)
     generate_video_from_folder(data_folder, fps)
+
+if __name__ == '__main__':
+    main()

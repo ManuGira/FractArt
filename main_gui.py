@@ -6,6 +6,7 @@ import pickle
 import fractal_painter
 from utils import pth
 import math3d
+import json
 # from threading import Thread
 
 # cv_process = Thread(target=pss.run, kwargs={"online": False})
@@ -28,21 +29,22 @@ class FractalExplorer:
         W, H = dim_xy
         self.pos_julia_xy = pos_julia_xy
         self.zoom_julia = zoom
-        self.delta_zoom_mandel = 5
+        self.delta_zoom_mandel = 1
         self.r_mat = r_mat
         self.pos_mandel_xy = constant_xy
         self.fisheye_factor = 0.0
         self.r_angle = 0.0
+        self.r_angle_z = 0.0
 
         self.pos_mouse_julia_xy = 0, 0
         self.pos_mouse_mandel_xy = 0, 0
         self.pos_mouse_julia_screen_xy = W//2, H//2
         self.light_effect = -1
 
-        self.itinary_path = pth(data_folder, "itinary.pkl")
-        self.itinary = []
+        self.locations_path = pth(data_folder, "locations.json")
+        self.locations = []
         self.time_per_px = None
-        self.max_iter = 1024
+        self.max_iter = 1024*8
 
         # run juliaset function once to compile them
         juliaset.juliaset_vectorized((1, 1), self.pos_julia_xy, self.zoom_julia, self.r_mat, self.pos_mandel_xy)
@@ -162,7 +164,7 @@ class FractalExplorer:
             self.display()
             key = chr(cv.waitKey(0) & 0xFF)
 
-            if key in 's':
+            if key in 'i':
                 # saving current location to itinary
                 location = {
                     "pos_julia_xy": self.pos_julia_xy,
@@ -172,10 +174,14 @@ class FractalExplorer:
                     "fisheye_factor": self.fisheye_factor,
                     "time_per_px": self.time_per_px,
                 }
-                self.itinary.append(location)
-                print(self.itinary)
-                with open(self.itinary_path, "wb") as pickle_out:
-                    pickle.dump(self.itinary, pickle_out)
+                self.locations.append(location)
+                print(self.locations)
+                with open(self.locations_path, "w") as json_out:
+                    locs_out = self.locations.copy()
+                    for k in range(len(locs_out)):
+                        locs_out[k] = locs_out[k].copy()
+                        locs_out[k]["r_mat"] = locs_out[k]["r_mat"].tolist()
+                    json.dump(locs_out, json_out)
 
             if key in 'x':
                 self.fisheye_factor = (self.fisheye_factor+0.1+1)%2-1
@@ -188,8 +194,15 @@ class FractalExplorer:
                 self.update_julia_hits()
                 self.update_julia_display()
 
-            if key in 'z':
-                self.zoom_julia += 1
+            if key in 'ad':
+                self.r_angle_z += 0.1 * ('a-d'.index(key)-1)
+                self.r_mat = math3d.axisAngle_to_Rmat([0,0,1], self.r_angle_z)
+                self.update_julia_hits()
+                self.update_julia_display()
+
+            if key in 'ws':
+                # zoom in or zoom out
+                self.zoom_julia += 1*('s-w'.index(key)-1)
                 print("updating...")
                 tic = time.time()
                 self.update_julia_hits()
@@ -200,7 +213,7 @@ class FractalExplorer:
                 print(f"computed {2*self.dim_xy[0]*self.dim_xy[1]} pixels in {dt:.3f} s")
 
             if key in 'q':
-                print("closing...")
+                print("quit...")
                 return
 
         print("terminated")
@@ -220,6 +233,6 @@ def printPressedKey():
 
 if __name__ == '__main__':
     # printPressedKey()
-    data_folder = "output2"
+    data_folder = "sounds"
     main(data_folder)
 
