@@ -90,8 +90,7 @@ class Itinary:
 
         nb_channel, nb_samples = soundwave.shape
         nb_sample_per_frame = int(round(fs / self.fps))
-        nb_frame = (nb_samples // nb_sample_per_frame)
-        return nb_frame
+        self.frame_nb = (nb_samples // nb_sample_per_frame)
 
     def load_sidechain(self):
         """
@@ -194,9 +193,21 @@ class Itinary:
     @staticmethod
     def interpolate_locations(locA, locB, t):
         out = {}
-        for keyword in ["pos_julia_xy", "pos_mandel_xy"]:
+        for keyword in ["pos_julia_xy"]:
             x = locA[keyword][0] * (1 - t) + t * locB[keyword][0]
             y = locA[keyword][1] * (1 - t) + t * locB[keyword][1]
+            out[keyword] = x, y
+
+        for keyword in ["pos_mandel_xy"]:
+            dz = (locB["zoom"] - locA["zoom"])*1
+            print(dz)
+            if dz == 0:
+                t2 = t
+            else:
+                t2 = (1-2**(-t*dz))/(1-2**(-dz))
+
+            x = locA[keyword][0] * (1 - t2) + t2 * locB[keyword][0]
+            y = locA[keyword][1] * (1 - t2) + t2 * locB[keyword][1]
             out[keyword] = x, y
 
         for keyword in ["zoom", "fisheye_factor"]:  # , "r_mat",]:
