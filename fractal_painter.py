@@ -71,6 +71,7 @@ def cvtHLScube_to_BGR(hls):
 
 
 def neon_effect2(hits, colors, brigther_factor=2, glow_size1=3):
+    # TODO: make it numba
     H, W, = hits.shape
     mask_bgr = np.zeros(shape=(H, W, 3), dtype=np.uint16)
 
@@ -177,6 +178,20 @@ def blend(bgras):
     out = np.concatenate((out_bgr, out_alpha), axis=2)
     return out
 
+@njit
+def fake_supersampling(julia_hits):
+    out = np.zeros_like(julia_hits)
+    H, W = out.shape
+    for j in range(1, H-1):
+        for i in range(1, W-1):
+            out[j, i] = np.min(julia_hits[j-1:j+1, i-1:i+1])
+    return out
+
+    # cv.morphologyEx(
+    #         src=julia_hits,
+    #         op=cv.MORPH_ERODE,
+    #         kernel=cv.getStructuringElement(),
+    #     )
 
 def main():
     import os

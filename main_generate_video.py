@@ -53,7 +53,9 @@ def generate_video_from_folder(data_folder, fps):
     out.release()
 
 
-def generate_images_from_hits(data_folder, full_itinary, max_iter):
+def generate_images_from_hits(data_folder, full_itinary, fps):
+    PROFILER=False
+
     print("generate_images_from_hits: ", end="")
     tic = time.time()
 
@@ -63,23 +65,39 @@ def generate_images_from_hits(data_folder, full_itinary, max_iter):
         os.makedirs(imgs_folder)
 
     K = len(os.listdir(hits_folder))
+    print(f"{K} hits matrices to paint")
     for k in range(K):
         with open(pth(hits_folder, f"{k}.pkl"), "rb") as pickle_in:
             julia_hits = pickle.load(pickle_in)
 
+        tic1 = time.time()
+        julia_hits = fractal_painter.fake_supersampling(julia_hits)
+        print(f"fake sampling: {time.time()-tic1:.4f}s", end="") if PROFILER else None
         # julia_bgr = fractal_painter.color_map(julia_hits, max_iter)
         # julia_bgr = fractal_painter.glow_effect(julia_bgr)
 
         loc = full_itinary[k]
-        width = 20 + 10*loc["cmd"]
+        width = 30 + 3*loc["sidechains"]["GHOST"]["volume"]
+
+        # TODO: trigger a new color on each GHOST.wav hit.
+
+        # quadratic scale multiplier 1 < f(k) < 4
+        quadratic_scale = (((k%1024)/1024)+1)**2
+        red_position = (k*100/fps)%1024
+        blue_position = (k*200/fps+512)%1024
 
         colors = [
-            {"bgr": [127, 0, 255], 'level': (3*k)%1500, "width": width},
-            {"bgr": [255, 0, 64], 'level': (3*k+512)%1500, "width": width},
+            {"bgr": [127, 0, 255], 'level': red_position*quadratic_scale, "width": width*quadratic_scale},
+            {"bgr": [255, 0, 64], 'level': blue_position*quadratic_scale, "width": width*quadratic_scale},
         ]
-        julia_bgr = fractal_painter.neon_effect2(julia_hits, colors)
+        tic2 = time.time()
+        julia_bgr = fractal_painter.neon_effect2(julia_hits, colors, brigther_factor=quadratic_scale)
+        print(f", neon_effect2: {time.time()-tic2:.4f}s", end="") if PROFILER else None
 
+        tic3 = time.time()
         cv.imwrite(pth(imgs_folder, f"{k}.png"), julia_bgr)
+        print(f", imwrite: {time.time()-tic3:.4f}s", flush=True) if PROFILER else None
+
         if ((100*k/K)//10) < ((100*(k+1)/K)//10):
             print("X", end="")
     print(f" {time.time()-tic:.4f}s")
