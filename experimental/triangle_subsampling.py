@@ -87,7 +87,7 @@ def move_grid(img, mg_x, mg_y):
             mg_y[j, i] = mg_y[j, i] + dy
 
 def main():
-    img0 = cv.imread("gallery/julia.png")
+    img0 = cv.imread("../gallery/julia.png")
     img = img0[:, :, 0]
     out = np.zeros_like(img0)
     triangle_size_w = 30

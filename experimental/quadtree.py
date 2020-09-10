@@ -188,7 +188,7 @@ class QuadTreeForce:
         return np.array(np.round(p2xy), dtype=np.int)
 
 def main():
-    img0 = cv.imread("gallery/bigjulia4.png")
+    img0 = cv.imread("../gallery/bigjulia4.png")
     img = img0[:, :, 0]
     N = 7
     root = QuadTreeForce(N, img)
