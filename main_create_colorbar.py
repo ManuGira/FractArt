@@ -18,34 +18,30 @@ class ComponentContext:
 class ViewContext:
     PAGE_MAXWIDTH = 1000
 
-    def __init__(self):
+    def __init__(self, process_name):
         self.nb_color = 2
         self.sliders_values = [0, 100]
+        self.colors = ['#A911FF', '#FFF77F']
+        self.current_slider = 0
 
         self.update_required = False
-        self.btn_minus = ComponentContext('btn-minus-id', 0)
-        self.btn_plus = ComponentContext('btn-plus-id', 0)
-        self.color_sliders = []
+        self.color_sliders = [ComponentContext(f'color-slider-{k}-id', self.sliders_values[k]) for k in range(2)]
+        self.color_picker = ComponentContext(f'color-picker-id', {'hex': self.colors[0]})
 
         self.app = None
-        self.init_dash_app()
+        self.init_dash_app(process_name)
 
     def make_dash_nbColorCaption(self):
         return f"N = {self.nb_color}"
 
-    def make_dash_sliders(self):
-        for k in range(self.nb_color):
-            val = self.sliders_values[k]
-            comp = ComponentContext('btn-plus-id', 0)
-            id = "colorbar-sliders-id",
-            children = [
-                           dcc.Slider(
-                               id="colorbar-slider-id",
-                               min=0,
-                               max=1023,
-                               value=255,
-                           ),
-                       ],
+    def make_dash_slider(self, k):
+        comp = self.color_sliders[k]
+        return dcc.Slider(
+            id=comp.id,
+            min=0,
+            max=1024,
+            value=comp.val,
+        )
 
     def make_dash_layout(self):
         return html.Div(
@@ -63,84 +59,45 @@ class ViewContext:
                         html.Hr(),
                     ],
                 ),
-                html.Div(
-                    children=[
-                        html.Div(id="nb-color-id", children=self.make_dash_nbColorCaption()),
-                        html.Button(children='-', id=self.btn_minus.id, n_clicks=self.btn_minus.val),
-                        html.Button(children='+', id=self.btn_plus.id, n_clicks=self.btn_plus.val),
-                    ],
-                ),
                 html.Div([
                     daq.ColorPicker(
-                        id='my-color-picker',
+                        id=self.color_picker.id,
                         label='Color Picker',
-                        value=dict(hex='#119DFF')
+                        value=self.color_picker.val
                     ),
                 ]),
-                html.Div(
-                    self.make_dash_sliders(),
-                ),
+                html.Div([
+                    self.make_dash_slider(0),
+                    self.make_dash_slider(1),
+                ]),
             ],
         )
 
-    def init_dash_app(self):
-        # Create the interactive Graphs
-        # https://plot.ly/dash/
-        self.app = dash.Dash()
-        # serve static files locally : https://dash.plot.ly/external-resources
-        # self.app.css.config.serve_locally = True
-        # self.app.scripts.config.serve_locally = True
+    def init_dash_app(self, process_name):
+        self.app = dash.Dash(process_name)
 
         self.app.layout = html.Div([
             self.make_dash_layout(),
-            html.Div(id=self.btn_minus.out_id, style={'display’': 'none'}),
-            html.Div(id=self.btn_plus.out_id, style={'display’': 'none'}),
-            html.Div(id='out-colorbar-slider-id', style={'display’': 'none'}),
-            dcc.Interval(id='interval-id', interval=50, n_intervals=0),
+            html.Div(id=self.color_sliders[0].out_id, style={'display’': 'none'}),
+            html.Div(id=self.color_sliders[1].out_id, style={'display’': 'none'}),
+            # dcc.Interval(id='interval-id', interval=50, n_intervals=0),  # update color bar
         ])
 
         @self.app.callback(
-                Output(component_id=self.btn_minus.out_id, component_property='children'),
-                Input(component_id=self.btn_minus.id, component_property='n_clicks'),)
-        def btn_minus_callback(val):
-            print("btn_minus_callback", dash.callback_context.triggered)
-            if val == self.btn_minus.val:
+            Output(component_id=self.color_picker.id, component_property='value'),
+            [Input(component_id=comp.id, component_property='value') for comp in self.color_sliders])
+        def callback(*values):
+            print("color_sliders[0]", dash.callback_context.triggered)
+            value = dash.callback_context.triggered[0]['value']
+            triggered_id = dash.callback_context.triggered[0]['prop_id'][:-6]
+            if value is None:
                 return dash.no_update
-            self.nb_color = max(0, self.nb_color - 1)
-            self.btn_minus.val = val
-            self.update_required = True
-            return dash.no_update
-
-        @self.app.callback(
-            Output(component_id=self.btn_plus.out_id, component_property='children'),
-            Input(component_id=self.btn_plus.id, component_property='n_clicks'), )
-        def btn_minus_callback(val):
-            print("btn_plus_callback", dash.callback_context.triggered)
-            if val == self.btn_plus.val:
-                return dash.no_update
-            self.nb_color += 1
-            self.btn_plus.val = val
-            self.update_required = True
-            return dash.no_update
-
-        # @self.app.callback(
-        #     Output(component_id='out-colorbar-slider-id', component_property='children'),
-        #     Input(component_id='colorbar-slider-id', component_property='value'), )
-        # def colorbar_slider_callback(value):
-        #     print("colorbar_slider_callback", dash.callback_context.triggered)
-        #     print(dash.callback_context)
-        #     return dash.no_update
-
-        @self.app.callback(
-            Output(component_id='layout-id', component_property='children'),
-            Input(component_id='interval-id', component_property='n_intervals'), )
-        def interval_callback(n_intervals):
-            # print("interval_callback", dash.callback_context.triggered)
-            if self.update_required:
-                self.update_required = False
-                return self.make_dash_layout()
-            else:
-                return dash.no_update
+            slider_ids = [comp.id for comp in self.color_sliders]
+            print(slider_ids)
+            print(triggered_id)
+            self.current_slider = slider_ids.index(triggered_id)
+            self.sliders_values[self.current_slider] = value
+            return {'hex': self.colors[self.current_slider]}
 
     def start(self):
         print('Dash created')
@@ -149,11 +106,11 @@ class ViewContext:
         print('Dash ok')
 
 
-def main():
-    view_context = ViewContext()
+def main(process_name):
+    view_context = ViewContext(process_name)
     view_context.start()
 
 
 if __name__ == '__main__':
-    main()
+    main(__name__)
 
