@@ -2,3 +2,4 @@
 gallery
 output*
 __pycache__
+experimental/numba_sandbox.py
