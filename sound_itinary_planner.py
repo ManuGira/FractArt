@@ -3,6 +3,7 @@ import time
 from utils import pth
 import scipy.io.wavfile
 import numpy as np
+import matplotlib.pyplot as plt
 
 
 class MusicMap:
@@ -105,6 +106,12 @@ class Itinary:
         :return: volume, trigger
         """
 
+        def smooth_filter(size):
+            out = np.linspace(-5, 5, size)
+            out = np.exp(-out**2)
+            out /= np.sum(out)
+            return out
+
         self.sidechains = {}
         for name in self.music_map.SIDECHAIN_NAMES:
             filepath = f"{self.music_map.SOUNDFOLDER}/{name}.wav"
@@ -112,6 +119,7 @@ class Itinary:
 
             # extract the command (volume) from the soundwave
             volume = np.max(np.abs(soundwave), axis=1)
+            # volume = np.convolve(volume, smooth_filter(fs//15))
             block_size = int(round(fs / self.fps))
             length = len(volume)
             block_nb = (length // block_size)
@@ -129,8 +137,12 @@ class Itinary:
                 vleft = vmiddle
                 vmiddle = vright
                 vright = volume[k+1]
-                if max(vleft, vright) < vmiddle:
+                if vmiddle/max(vleft, vright)>2:
                     trigger[k] = 1
+
+            # plt.plot(volume, 'g')
+            # plt.stem(trigger)
+            # plt.show()
 
             # store the result
             self.sidechains[name] = {}
