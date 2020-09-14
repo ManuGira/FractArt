@@ -2,12 +2,12 @@ import pickle
 import juliaset
 import fractal_painter
 from utils import pth
-import utils
+# import utils
 import os
 import cv2 as cv
 import time
 import numpy as np
-import scipy.io.wavfile
+# import scipy.io.wavfile
 import sound_itinary_planner
 
 
@@ -63,7 +63,7 @@ def generate_video_from_folder(data_folder, fps):
     out.release()
 
 
-def generate_images_from_hits(data_folder, full_itinary, fps):
+def generate_images_from_hits(data_folder, full_itinary, max_iter, fps):
     PROFILER=False
 
     print("generate_images_from_hits: ", end="")
@@ -75,6 +75,7 @@ def generate_images_from_hits(data_folder, full_itinary, fps):
         os.makedirs(imgs_folder)
 
     K = len(os.listdir(hits_folder))
+    cmd = sound_itinary_planner.Itinary.get_smooth_trigger_from_full_itinary(full_itinary, "GHOST", fps, attack_s=0.1, release_rate=0.04)
     print(f"{K} hits matrices to paint")
     for k in range(K):
         with open(pth(hits_folder, f"{k}.pkl"), "rb") as pickle_in:
@@ -102,9 +103,9 @@ def generate_images_from_hits(data_folder, full_itinary, fps):
 
         loc = full_itinary[k]
 
-        cmd = max(cmd, loc["sidechains"]["GHOST"]["volume"]/attenuation)*attenuation
+
         if True:
-            julia_hits += int(15 * cmd)
+            julia_hits += int(5 * cmd[k])
             julia_hits[julia_hits > max_iter-1] = max_iter-1
             julia_bgr = fractal_painter.color_map(julia_hits, max_iter)
             julia_bgr = fractal_painter.glow_effect(julia_bgr)

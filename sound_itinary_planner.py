@@ -200,7 +200,7 @@ class Itinary:
 
         for keyword in ["pos_mandel_xy"]:
             dz = (locB["zoom"] - locA["zoom"])*1
-            print(dz)
+            # print(dz)
             if dz == 0:
                 t2 = t
             else:
@@ -215,6 +215,21 @@ class Itinary:
         out["r_mat"] = np.eye(4)
         return out
 
+    @staticmethod
+    def get_smooth_trigger_from_full_itinary(full_itinary, sidechain_name, fps, attack_s=0.1, release_rate=0.04):
+        K = len(full_itinary)
+        out = np.array([full_itinary[k]["sidechains"][sidechain_name]["trigger"] for k in range(K)])
+
+        # compute the attack delay kernel flipped (suited for convolution)
+        attack_size = int(max(1, round(attack_s*fps)))
+        attack_phase = np.linspace(0, 1, attack_size)
+        rr = release_rate**(1/fps)
+        release_size = np.log(0.01)/np.log(rr)
+        release_phase = rr**(np.arange(release_size))
+        kernel = np.concatenate((attack_phase, release_phase), axis=0)
+        out = np.convolve(out, kernel, mode="same")
+        out[out > 1] = 1
+        return out
 
 if __name__ == '__main__':
     itinary = Itinary(AnotherPlanetMap(), 10)
