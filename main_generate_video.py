@@ -82,34 +82,63 @@ def generate_images_from_hits(data_folder, full_itinary, fps):
 
         tic1 = time.time()
         julia_hits = fractal_painter.fake_supersampling(julia_hits)
+
+        # compute gradient
+        gradient = fractal_painter.compute_gradient(julia_hits).astype(float)
+        grad_magn = np.sqrt(gradient[:, :, 0]**2 + gradient[:, :, 1]**2)
+        grad_magn.shape += (1,)
+        grad_magn = np.repeat(grad_magn, repeats=2, axis=2)
+        threshold = 64  # the lower the stronger
+        mask = grad_magn > threshold
+        gradient[mask] = threshold*gradient[mask]/grad_magn[mask]
+        gradient /= threshold
+
+        # gdx = (128*gradient[:, :, 1]/threshold + 127).astype(np.uint8)
+        # gdy = (128*gradient[:, :, 0]/threshold + 127).astype(np.uint8)
+
         print(f"fake sampling: {time.time()-tic1:.4f}s", end="") if PROFILER else None
         # julia_bgr = fractal_painter.color_map(julia_hits, max_iter)
         # julia_bgr = fractal_painter.glow_effect(julia_bgr)
 
         loc = full_itinary[k]
-        width = 30 + 3*loc["sidechains"]["GHOST"]["volume"]
 
-        # TODO: trigger a new color on each GHOST.wav hit.
+        cmd = max(cmd, loc["sidechains"]["GHOST"]["volume"]/attenuation)*attenuation
+        if True:
+            julia_hits += int(15 * cmd)
+            julia_hits[julia_hits > max_iter-1] = max_iter-1
+            julia_bgr = fractal_painter.color_map(julia_hits, max_iter)
+            julia_bgr = fractal_painter.glow_effect(julia_bgr)
+        else:
+            width = 30 + 3*loc["sidechains"]["GHOST"]["volume"]
 
-        # quadratic scale multiplier 1 < f(k) < 4
-        quadratic_scale = (((k%1024)/1024)+1)**2
-        red_position = (k*100/fps)%1024
-        blue_position = (k*200/fps+512)%1024
+            # TODO: trigger a new color on each GHOST.wav hit.
 
-        colors = [
-            {"bgr": [127, 0, 255], 'level': red_position*quadratic_scale, "width": width*quadratic_scale},
-            {"bgr": [255, 0, 64], 'level': blue_position*quadratic_scale, "width": width*quadratic_scale},
-        ]
-        tic2 = time.time()
-        julia_bgr = fractal_painter.neon_effect2(julia_hits, colors, brigther_factor=quadratic_scale)
-        print(f", neon_effect2: {time.time()-tic2:.4f}s", end="") if PROFILER else None
+            # quadratic scale multiplier 1 < f(k) < 4
+            quadratic_scale = (((k%1024)/1024)+1)**2
+            red_position = (k*100/fps)%1024
+            blue_position = (k*200/fps+512)%1024
+
+            colors = [
+                {"bgr": [127, 0, 255], 'level': red_position*quadratic_scale, "width": width*quadratic_scale},
+                {"bgr": [255, 0, 64], 'level': blue_position*quadratic_scale, "width": width*quadratic_scale},
+            ]
+            tic2 = time.time()
+            julia_bgr = fractal_painter.neon_effect2(julia_hits, colors, brigther_factor=quadratic_scale)
+            print(f", neon_effect2: {time.time()-tic2:.4f}s", end="") if PROFILER else None
+
+        # merge gradient to bgr
+        julia_hls = fractal_painter.cvtBRG_to_HLScube(julia_bgr)
+        julia_hls[:, :, 1] = julia_hls[:, :, 1] + gradient[:, :, 0]*cmd
+        julia_hls[julia_hls > 1] = 1
+        julia_hls[julia_hls < 0] = 0
+        julia_bgr = fractal_painter.cvtHLScube_to_BGR(julia_hls)
 
         tic3 = time.time()
+        # cv.imwrite(pth(imgs_folder, f"{k}.png"), julia_bgr)
         cv.imwrite(pth(imgs_folder, f"{k}.png"), julia_bgr)
         print(f", imwrite: {time.time()-tic3:.4f}s", flush=True) if PROFILER else None
 
-        if ((100*k/K)//10) < ((100*(k+1)/K)//10):
-            print("X", end="")
+        progression_bar(k, K)
     print(f" {time.time()-tic:.4f}s")
 
 
@@ -174,9 +203,9 @@ def generate_hits_from_itinary(data_folder, dim_xy, full_itinary, supersampling,
     print(f"Total time: {time.time()-tic0:.1f}s")
 
 def main():
-    data_folder = "output3"
+    data_folder = "outputs/output3"
 
-    MODE = ["sketchy", "video LD", "video", "video HD", "poster"][1]
+    MODE = ["sketchy", "video LD", "video", "video HD", "poster"][-2]
     if MODE == "sketchy":
         dim_xy = (72, 54)
         supersampling = 1

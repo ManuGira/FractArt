@@ -152,6 +152,14 @@ def neon_effect(hits, level, color_bgr, width=200, brigther_factor=10, glow_size
     return mask_bgra
 
 
+def compute_gradient(hits):
+    H, W = hits.shape
+    out = np.zeros(shape=(H, W, 2), dtype=hits.dtype)
+    out[:, :, 0] = cv.filter2D(hits.astype(float), cv.CV_64F, np.array([[-1, 1]]))
+    out[:, :, 1] = cv.filter2D(hits.astype(float), cv.CV_64F, np.array([-1, 1]))
+    return out
+
+
 def blend(bgras):
     bgrs = []
     alphas = []
