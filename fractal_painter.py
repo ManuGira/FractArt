@@ -19,6 +19,18 @@ def color_gradient(colors_bgr, length, interpolation=cv.INTER_LINEAR):
     return cv.resize(colors_bgr, dsize=(3, length), interpolation=interpolation)
 
 
+def color_gradient_2(colors_bgr0, colors_bgr1, length):
+    b0, g0, r0 = colors_bgr0
+    b1, g1, r1 = colors_bgr1
+
+    out = np.zeros((length, 3), dtype=np.uint8)
+
+    out[:, 0] = (np.linspace(b0, b1, length)+0.5).astype(np.uint8)
+    out[:, 1] = (np.linspace(g0, g1, length)+0.5).astype(np.uint8)
+    out[:, 2] = (np.linspace(r0, r1, length)+0.5).astype(np.uint8)
+    return out
+
+
 def color_map(hits, max_iter):
     # dB = lambda x: (20 * np.log(x + 1)).astype(np.uint16)
     # hits = dB(hits)

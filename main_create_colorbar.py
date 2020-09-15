@@ -75,13 +75,19 @@ class ViewContext:
             p0, p1 = color_positions[k], color_positions[k+1]
             if p1-p0 == 0:
                 continue
-            color_section = fractal_painter.color_gradient([c0, c1], p1-p0)
+            color_section = fractal_painter.color_gradient_2(c0, c1, p1-p0)
             color_section.shape = (1,) + color_section.shape
             colorbar[0, p0:p1, :] = color_section
-        colorbar = cv.resize(colorbar, dsize=(1024, 100), interpolation=cv.INTER_NEAREST)
-        cv.imwrite(f"{ViewContext.IMAGE_DIRECTORY}colorbar.png", colorbar)
 
-        return dcc.Graph(figure=go.Figure(go.Image(z=colorbar)), style={"width": "100%"})  #, "display": "inline-block"})
+        colorbar = cv.resize(colorbar, dsize=(1024, 100), interpolation=cv.INTER_NEAREST)
+
+        cv.imwrite(f"{ViewContext.IMAGE_DIRECTORY}colorbar.png", colorbar[:, :, ::-1])
+
+        plot = dcc.Graph(figure=go.Figure(go.Image(z=colorbar)))
+        # return dcc.Graph(figure=go.Figure(go.Image(z=colorbar)), style={"width": "100%"})  #, "display": "inline-block"})
+        plot.figure.layout.autosize = True
+        return plot
+
 
     def make_dash_layout(self):
         return html.Div(
@@ -114,8 +120,6 @@ class ViewContext:
         )
 
     def init_dash_app(self, process_name):
-        self.make_dash_colorbar()
-
         self.app = dash.Dash(process_name)
 
         self.app.layout = html.Div([
