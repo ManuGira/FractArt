@@ -7,7 +7,10 @@ import dash_daq as daq
 from dash.exceptions import PreventUpdate
 import plotly.graph_objs as go
 import numpy as np
-
+import utils
+import fractal_painter
+import cv2 as cv
+import flask
 
 class ComponentContext:
     def __init__(self, id, val):
@@ -17,15 +20,17 @@ class ComponentContext:
 
 class ViewContext:
     PAGE_MAXWIDTH = 1000
+    STATIC_IMAGE_ROUTE = '/static/'
+    IMAGE_DIRECTORY = './assets/'
 
     def __init__(self, process_name):
-        self.nb_color = 2
-        self.sliders_values = [0, 100]
-        self.colors = ['#A911FF', '#FFF77F']
+        self.nb_color = 3
+        self.sliders_values = [0, 100, 120]
+        self.colors = ['#A911FF', '#FFF77F', '#22F722']
         self.current_slider = 0
 
         self.update_required = False
-        self.color_sliders = [ComponentContext(f'color-slider-{k}-id', self.sliders_values[k]) for k in range(2)]
+        self.color_sliders = [ComponentContext(f'color-slider-{k}-id', self.sliders_values[k]) for k in range(self.nb_color)]
         self.color_picker = ComponentContext(f'color-picker-id', {'hex': self.colors[0]})
 
         self.app = None
@@ -42,6 +47,30 @@ class ViewContext:
             max=1024,
             value=comp.val,
         )
+
+    def make_dash_colorbar(self):
+        order = np.argsort(self.sliders_values)
+        color_positions = [self.sliders_values[o] for o in order]
+        colors = [self.colors[o] for o in order]
+
+        color_positions = [0] + color_positions + [1023]
+        colors = colors[:1] + colors + colors[-1:]
+        colors = [utils.color_hex2rgb(c) for c in colors]
+        # colors = [c[::-1] for c in colors]  # rgb to bgr
+
+        colorbar = np.zeros((1, 1024, 3), dtype=np.uint8)
+        for k in range(len(colors)-1):
+            c0, c1 = colors[k], colors[k+1]
+            p0, p1 = color_positions[k], color_positions[k+1]
+            if p1-p0 == 0:
+                continue
+            color_section = fractal_painter.color_gradient([c0, c1], p1-p0)
+            color_section.shape = (1,) + color_section.shape
+            colorbar[0, p0:p1, :] = color_section
+        colorbar = cv.resize(colorbar, dsize=(1024, 100), interpolation=cv.INTER_NEAREST)
+        cv.imwrite(f"{ViewContext.IMAGE_DIRECTORY}colorbar.png", colorbar)
+
+        return dcc.Graph(figure=go.Figure(go.Image(z=colorbar)), style={"width": "100%"})  #, "display": "inline-block"})
 
     def make_dash_layout(self):
         return html.Div(
@@ -66,25 +95,36 @@ class ViewContext:
                         value=self.color_picker.val
                     ),
                 ]),
-                html.Div([
-                    self.make_dash_slider(0),
-                    self.make_dash_slider(1),
-                ]),
+                html.Div(
+                    [self.make_dash_slider(k) for k in range(self.nb_color)],
+                ),
+                html.Div(
+                    id='color-bar-img',
+                    children=self.make_dash_colorbar()
+                    # html.Img(id='colorbar-img-id'),
+                ),
             ],
         )
 
     def init_dash_app(self, process_name):
+        self.make_dash_colorbar()
+
         self.app = dash.Dash(process_name)
 
         self.app.layout = html.Div([
             self.make_dash_layout(),
             html.Div(id=self.color_sliders[0].out_id, style={'display’': 'none'}),
             html.Div(id=self.color_sliders[1].out_id, style={'display’': 'none'}),
+            html.Div(id=self.color_picker.out_id, style={'display’': 'none'}),
             # dcc.Interval(id='interval-id', interval=50, n_intervals=0),  # update color bar
         ])
 
         @self.app.callback(
-            Output(component_id=self.color_picker.id, component_property='value'),
+            [
+                Output(component_id=self.color_picker.id, component_property='value'),
+                Output(component_id='color-bar-img', component_property='children'),
+                # Output(component_id='colorbar-img-id', component_property='src'),
+             ],
             [Input(component_id=comp.id, component_property='value') for comp in self.color_sliders])
         def callback(*values):
             print("color_sliders[0]", dash.callback_context.triggered)
@@ -97,12 +137,32 @@ class ViewContext:
             print(triggered_id)
             self.current_slider = slider_ids.index(triggered_id)
             self.sliders_values[self.current_slider] = value
-            return {'hex': self.colors[self.current_slider]}
+            return [
+                {'hex': self.colors[self.current_slider]},
+                self.make_dash_colorbar(),
+            ]
+
+            # return {'hex': self.colors[self.current_slider]}
+
+        # @self.app.callback(
+        #     dash.dependencies.Output('image', 'src'),
+        #     [dash.dependencies.Input('image-dropdown', 'value')])
+        # def update_image_src(value):
+        #     return ViewContext.STATIC_IMAGE_ROUTE + value
+
+        # Add a static image route that serves images from desktop
+        # Be *very* careful here - you don't want to serve arbitrary files
+        # # from your computer or server
+        # @self.app.server.route(f'{ViewContext.STATIC_IMAGE_ROUTE}<image_path>.png')
+        # def serve_image(image_path):
+        #     image_name = '{}.png'.format(image_path)
+        #     print("image_name", image_name)
+        #     return flask.send_from_directory(ViewContext.IMAGE_DIRECTORY, image_name)
 
     def start(self):
         print('Dash created')
         webbrowser.open_new('http://127.0.0.1:8050/')
-        self.app.run_server(debug=True, processes=0)
+        self.app.run_server(debug=False, processes=0)
         print('Dash ok')
 
 

@@ -2,6 +2,12 @@ import os
 import cv2 as cv
 import numpy as np
 
+def color_hex2rgb(hexa):
+    # hexa must be in format #123456 in hexadecimal
+    r, g, b = hexa[1:3], hexa[3:5], hexa[5:7]
+    r, g, b = [int(c, 16) for c in [r, g, b]]
+    return r, g, b
+
 
 def sec_to_hms(sec):
     h = int(sec / 60 / 60)
