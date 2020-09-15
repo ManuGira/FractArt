@@ -24,14 +24,15 @@ class ViewContext:
     IMAGE_DIRECTORY = './assets/'
 
     def __init__(self, process_name):
-        self.nb_color = 3
-        self.sliders_values = [0, 100, 120]
-        self.colors = ['#A911FF', '#FFF77F', '#22F722']
+        self.nb_color = 10
+        self.sliders_values = [0, 319, 403, 439, 725, 927, 948, 988, 1004, 1017]
+        self.colors = ['#000000', '#FF00BD', '#f89ce0', '#000000', '#1570ec', '#9dc2f4', '#000000', '#000000', '#20f8f0', '#000000']
         self.current_slider = 0
 
         self.update_required = False
         self.color_sliders = [ComponentContext(f'color-slider-{k}-id', self.sliders_values[k]) for k in range(self.nb_color)]
         self.color_pickers = [ComponentContext(f'color-picker-{k}-id', {'hex': self.colors[k]}) for k in range(self.nb_color)]
+        self.color_pickers_div = [ComponentContext(f'color-picker-div-{k}-id', '') for k in range(self.nb_color)]
 
         self.app = None
         self.init_dash_app(process_name)
@@ -40,11 +41,13 @@ class ViewContext:
         return f"N = {self.nb_color}"
 
     def make_dash_colorpicker(self, k):
+        comp_div = self.color_pickers_div[k]
         comp = self.color_pickers[k]
         return html.Div(
-            id=comp.id,
+            id=comp_div.id,
             style=None if k == self.current_slider else {'display': 'none'},
             children=daq.ColorPicker(
+                id=comp.id,
                 label=f'Color Picker {k}',
                 value=comp.val,
             ),
@@ -109,12 +112,12 @@ class ViewContext:
                     [self.make_dash_colorpicker(k) for k in range(self.nb_color)],
                 ),
                 html.Div(
-                    [self.make_dash_slider(k) for k in range(self.nb_color)],
-                ),
-                html.Div(
                     id='color-bar-img',
                     children=self.make_dash_colorbar()
                     # html.Img(id='colorbar-img-id'),
+                ),
+                html.Div(
+                    [self.make_dash_slider(k) for k in range(self.nb_color)],
                 ),
             ],
         )
@@ -131,20 +134,26 @@ class ViewContext:
         ])
 
         @self.app.callback(
-            [Output(component_id='color-bar-img', component_property='children')],
-            [Output(component_id=color_picker.id, component_property='style') for color_picker in self.color_pickers] +
-            [Input(component_id=color_slider.id, component_property='value') for color_slider in self.color_sliders])
+            [Output(component_id='color-bar-img', component_property='children')] +
+            [Output(component_id=color_picker_div.id, component_property='style') for color_picker_div in self.color_pickers_div],
+            [Input(component_id=color_slider.id, component_property='value') for color_slider in self.color_sliders] +
+            [Input(component_id=color_picker.id, component_property='value') for color_picker in self.color_pickers])
         def callback(*values):
-            print("color_sliders[0]", dash.callback_context.triggered)
+            print("CALLBACK", dash.callback_context.triggered)
             value = dash.callback_context.triggered[0]['value']
             triggered_id = dash.callback_context.triggered[0]['prop_id'][:-6]
             if value is None:
                 return dash.no_update
-            slider_ids = [comp.id for comp in self.color_sliders]
-            print(slider_ids)
-            print(triggered_id)
-            self.current_slider = slider_ids.index(triggered_id)
-            self.sliders_values[self.current_slider] = value
+
+            if 'color-slider' in triggered_id:
+                slider_ids = [comp.id for comp in self.color_sliders]
+                self.current_slider = slider_ids.index(triggered_id)
+                self.sliders_values[self.current_slider] = value
+            elif 'color-picker' in triggered_id:
+                self.colors[self.current_slider] = value['hex']
+
+            print(f"self.sliders_values = {self.sliders_values}")
+            print(f"self.colors = {self.colors}")
 
             colorbar_styles = []
             for k in range(self.nb_color):
@@ -154,6 +163,7 @@ class ViewContext:
                     colorbar_styles.append({'display': 'none'})
 
             return [self.make_dash_colorbar()] + colorbar_styles
+
 
 
     def start(self):
