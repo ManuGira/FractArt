@@ -7,8 +7,10 @@ import dash_daq as daq
 import plotly.graph_objs as go
 import numpy as np
 import utils
+from utils import pth
 import fractal_painter
 import cv2 as cv
+import pickle
 
 class ComponentContext:
     def __init__(self, id, val):
@@ -19,21 +21,32 @@ class ComponentContext:
 class ViewContext:
     PAGE_MAXWIDTH = 1000
     IMAGE_DIRECTORY = './assets/'
+    MAX_ITER = 8196
 
     def __init__(self, process_name):
         self.nb_color = 10
-        self.sliders_values = [0, 319, 403, 439, 725, 927, 948, 988, 1004, 1017]
-        self.colors = ['#000000', '#FF00BD', '#f89ce0', '#000000', '#1570ec', '#9dc2f4', '#000000', '#000000', '#20f8f0', '#000000']
+        self.sliders_values = [170, 282, 297, 317, 231, 248, 267, 238, 327, 1024]
+        self.colors = ['#000000', '#FF00BD', '#f09cf8', '#000000', '#1570ec', '#9dc2f4', '#000000', '#000000', '#20f8f0', '#000000']
         self.current_slider = 0
+        self.colorbar_bgr = np.zeros((1024, 3))
 
         self.update_required = False
         self.color_sliders = [ComponentContext(f'color-slider-{k}-id', self.sliders_values[k]) for k in range(self.nb_color)]
         self.color_pickers = [ComponentContext(f'color-picker-{k}-id', {'hex': self.colors[k]}) for k in range(self.nb_color)]
         self.color_pickers_div = [ComponentContext(f'color-picker-div-{k}-id', '') for k in range(self.nb_color)]
 
+        self.julia_hits = None
+        self.load_julia_hits()
+
         self.app = None
         self.init_dash_app(process_name)
 
+    def load_julia_hits(self):
+        with open(pth(ViewContext.IMAGE_DIRECTORY, "7865.pkl"), "rb") as pickle_in:
+            self.julia_hits = pickle.load(pickle_in)
+        self.julia_hits = fractal_painter.fake_supersampling(self.julia_hits)
+        max_iter = ViewContext.MAX_ITER
+        self.julia_hits[self.julia_hits > max_iter - 1] = max_iter - 1
 
     def make_dash_colorpicker(self, k):
         comp_div = self.color_pickers_div[k]
@@ -76,6 +89,8 @@ class ViewContext:
             color_section.shape = (1,) + color_section.shape
             colorbar[0, p0:p1, :] = color_section
 
+        self.colorbar_bgr = colorbar[0, :, ::-1]
+
         colorbar = cv.resize(colorbar, dsize=(1024, 100), interpolation=cv.INTER_NEAREST)
 
         cv.imwrite(f"{ViewContext.IMAGE_DIRECTORY}colorbar.png", colorbar[:, :, ::-1])
@@ -83,6 +98,11 @@ class ViewContext:
         plot = dcc.Graph(figure=go.Figure(go.Image(z=colorbar)))
         return plot
 
+    def make_dash_painted_fractal(self):
+        julia_bgr = fractal_painter.apply_color_map(self.julia_hits, self.colorbar_bgr)
+        cv.imwrite(f"{ViewContext.IMAGE_DIRECTORY}fractal.png", julia_bgr)
+        plot = dcc.Graph(figure=go.Figure(go.Image(z=julia_bgr[:, :, ::-1])))
+        return plot
 
     def make_dash_layout(self):
         return html.Div(
@@ -110,6 +130,10 @@ class ViewContext:
                 html.Div(
                     [self.make_dash_slider(k) for k in range(self.nb_color)],
                 ),
+                html.Div(
+                    id='painted-fractal-img',
+                    children=self.make_dash_painted_fractal()
+                ),
             ],
         )
 
@@ -125,6 +149,7 @@ class ViewContext:
 
         @self.app.callback(
             [Output(component_id='color-bar-img', component_property='children')] +
+            [Output(component_id='painted-fractal-img', component_property='children')] +
             [Output(component_id=color_picker_div.id, component_property='style') for color_picker_div in self.color_pickers_div],
             [Input(component_id=color_slider.id, component_property='value') for color_slider in self.color_sliders] +
             [Input(component_id=color_picker.id, component_property='value') for color_picker in self.color_pickers])
@@ -152,7 +177,7 @@ class ViewContext:
                 else:
                     colorbar_styles.append({'display': 'none'})
 
-            return [self.make_dash_colorbar()] + colorbar_styles
+            return [self.make_dash_colorbar(), self.make_dash_painted_fractal()] + colorbar_styles
 
     def start(self):
         print('Dash created')

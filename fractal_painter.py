@@ -20,6 +20,9 @@ def color_gradient(colors_bgr, length, interpolation=cv.INTER_LINEAR):
 
 
 def color_gradient_2(colors_bgr0, colors_bgr1, length):
+    if length < 0 :
+        colors_bgr0, colors_bgr1 = colors_bgr1[:], colors_bgr0[:]
+        length = abs(length)
     b0, g0, r0 = colors_bgr0
     b1, g1, r1 = colors_bgr1
 
