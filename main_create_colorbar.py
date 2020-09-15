@@ -2,15 +2,13 @@ import webbrowser
 import dash
 import dash_core_components as dcc
 import dash_html_components as html
-from dash.dependencies import Input, Output, State
+from dash.dependencies import Input, Output
 import dash_daq as daq
-from dash.exceptions import PreventUpdate
 import plotly.graph_objs as go
 import numpy as np
 import utils
 import fractal_painter
 import cv2 as cv
-import flask
 
 class ComponentContext:
     def __init__(self, id, val):
@@ -20,7 +18,6 @@ class ComponentContext:
 
 class ViewContext:
     PAGE_MAXWIDTH = 1000
-    STATIC_IMAGE_ROUTE = '/static/'
     IMAGE_DIRECTORY = './assets/'
 
     def __init__(self, process_name):
@@ -37,8 +34,6 @@ class ViewContext:
         self.app = None
         self.init_dash_app(process_name)
 
-    def make_dash_nbColorCaption(self):
-        return f"N = {self.nb_color}"
 
     def make_dash_colorpicker(self, k):
         comp_div = self.color_pickers_div[k]
@@ -70,7 +65,6 @@ class ViewContext:
         color_positions = [0] + color_positions + [1023]
         colors = colors[:1] + colors + colors[-1:]
         colors = [utils.color_hex2rgb(c) for c in colors]
-        # colors = [c[::-1] for c in colors]  # rgb to bgr
 
         colorbar = np.zeros((1, 1024, 3), dtype=np.uint8)
         for k in range(len(colors)-1):
@@ -87,8 +81,6 @@ class ViewContext:
         cv.imwrite(f"{ViewContext.IMAGE_DIRECTORY}colorbar.png", colorbar[:, :, ::-1])
 
         plot = dcc.Graph(figure=go.Figure(go.Image(z=colorbar)))
-        # return dcc.Graph(figure=go.Figure(go.Image(z=colorbar)), style={"width": "100%"})  #, "display": "inline-block"})
-        plot.figure.layout.autosize = True
         return plot
 
 
@@ -114,7 +106,6 @@ class ViewContext:
                 html.Div(
                     id='color-bar-img',
                     children=self.make_dash_colorbar()
-                    # html.Img(id='colorbar-img-id'),
                 ),
                 html.Div(
                     [self.make_dash_slider(k) for k in range(self.nb_color)],
@@ -130,7 +121,6 @@ class ViewContext:
             html.Div(id=self.color_sliders[0].out_id, style={'display': 'none'}),
             html.Div(id=self.color_sliders[1].out_id, style={'display': 'none'}),
             html.Div(id=self.color_pickers[0].out_id, style={'display': 'none'}),
-            # dcc.Interval(id='interval-id', interval=50, n_intervals=0),  # update color bar
         ])
 
         @self.app.callback(
@@ -163,8 +153,6 @@ class ViewContext:
                     colorbar_styles.append({'display': 'none'})
 
             return [self.make_dash_colorbar()] + colorbar_styles
-
-
 
     def start(self):
         print('Dash created')
