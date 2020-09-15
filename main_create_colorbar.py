@@ -31,13 +31,24 @@ class ViewContext:
 
         self.update_required = False
         self.color_sliders = [ComponentContext(f'color-slider-{k}-id', self.sliders_values[k]) for k in range(self.nb_color)]
-        self.color_picker = ComponentContext(f'color-picker-id', {'hex': self.colors[0]})
+        self.color_pickers = [ComponentContext(f'color-picker-{k}-id', {'hex': self.colors[k]}) for k in range(self.nb_color)]
 
         self.app = None
         self.init_dash_app(process_name)
 
     def make_dash_nbColorCaption(self):
         return f"N = {self.nb_color}"
+
+    def make_dash_colorpicker(self, k):
+        comp = self.color_pickers[k]
+        return html.Div(
+            id=comp.id,
+            style=None if k == self.current_slider else {'display': 'none'},
+            children=daq.ColorPicker(
+                label=f'Color Picker {k}',
+                value=comp.val,
+            ),
+        )
 
     def make_dash_slider(self, k):
         comp = self.color_sliders[k]
@@ -88,13 +99,9 @@ class ViewContext:
                         html.Hr(),
                     ],
                 ),
-                html.Div([
-                    daq.ColorPicker(
-                        id=self.color_picker.id,
-                        label='Color Picker',
-                        value=self.color_picker.val
-                    ),
-                ]),
+                html.Div(
+                    [self.make_dash_colorpicker(k) for k in range(self.nb_color)],
+                ),
                 html.Div(
                     [self.make_dash_slider(k) for k in range(self.nb_color)],
                 ),
@@ -113,19 +120,16 @@ class ViewContext:
 
         self.app.layout = html.Div([
             self.make_dash_layout(),
-            html.Div(id=self.color_sliders[0].out_id, style={'display’': 'none'}),
-            html.Div(id=self.color_sliders[1].out_id, style={'display’': 'none'}),
-            html.Div(id=self.color_picker.out_id, style={'display’': 'none'}),
+            html.Div(id=self.color_sliders[0].out_id, style={'display': 'none'}),
+            html.Div(id=self.color_sliders[1].out_id, style={'display': 'none'}),
+            html.Div(id=self.color_pickers[0].out_id, style={'display': 'none'}),
             # dcc.Interval(id='interval-id', interval=50, n_intervals=0),  # update color bar
         ])
 
         @self.app.callback(
-            [
-                Output(component_id=self.color_picker.id, component_property='value'),
-                Output(component_id='color-bar-img', component_property='children'),
-                # Output(component_id='colorbar-img-id', component_property='src'),
-             ],
-            [Input(component_id=comp.id, component_property='value') for comp in self.color_sliders])
+            [Output(component_id='color-bar-img', component_property='children')],
+            [Output(component_id=color_picker.id, component_property='style') for color_picker in self.color_pickers] +
+            [Input(component_id=color_slider.id, component_property='value') for color_slider in self.color_sliders])
         def callback(*values):
             print("color_sliders[0]", dash.callback_context.triggered)
             value = dash.callback_context.triggered[0]['value']
@@ -137,27 +141,16 @@ class ViewContext:
             print(triggered_id)
             self.current_slider = slider_ids.index(triggered_id)
             self.sliders_values[self.current_slider] = value
-            return [
-                {'hex': self.colors[self.current_slider]},
-                self.make_dash_colorbar(),
-            ]
 
-            # return {'hex': self.colors[self.current_slider]}
+            colorbar_styles = []
+            for k in range(self.nb_color):
+                if self.current_slider == k:
+                    colorbar_styles.append(None)
+                else:
+                    colorbar_styles.append({'display': 'none'})
 
-        # @self.app.callback(
-        #     dash.dependencies.Output('image', 'src'),
-        #     [dash.dependencies.Input('image-dropdown', 'value')])
-        # def update_image_src(value):
-        #     return ViewContext.STATIC_IMAGE_ROUTE + value
+            return [self.make_dash_colorbar()] + colorbar_styles
 
-        # Add a static image route that serves images from desktop
-        # Be *very* careful here - you don't want to serve arbitrary files
-        # # from your computer or server
-        # @self.app.server.route(f'{ViewContext.STATIC_IMAGE_ROUTE}<image_path>.png')
-        # def serve_image(image_path):
-        #     image_name = '{}.png'.format(image_path)
-        #     print("image_name", image_name)
-        #     return flask.send_from_directory(ViewContext.IMAGE_DIRECTORY, image_name)
 
     def start(self):
         print('Dash created')
