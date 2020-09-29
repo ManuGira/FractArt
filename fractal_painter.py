@@ -40,14 +40,15 @@ def color_map(hits, max_iter):
     # BRG colors
     N = 8192
     color_list = [
+        [255, 255, 255],
         [0, 0, 0],
         [255, 255, 95],
         [0, 0, 0],
-        [169, 127, 255],
+        [127, 127, 255],
         [0, 0, 0],
         [127, 255, 255],
         [0, 0, 0],
-    ]*8
+    ]*16
     color_map_0 = color_gradient(color_list, N)
     color_map_1 = color_gradient([
         [0, 0, 255],
@@ -62,11 +63,28 @@ def color_map(hits, max_iter):
     return apply_color_map(hits, color_map)
 
 
+def load_texture(path):
+    texture = cv.imread(path)
+    H, W, _ = texture.shape
+    mx = max(H, W)
+    texture = cv.resize(texture, (mx, mx))
+    return texture
+
+
+def texture_map(mesh_x, mesh_y, texture):
+    D = texture.shape[0]
+    mesh_u = (np.mod(mesh_x, 1)*D).astype(np.float32)
+    mesh_v = (np.mod(mesh_y, 1)*D).astype(np.float32)
+    out = cv.remap(texture, mesh_u, mesh_v, cv.INTER_NEAREST)
+    return out
+
+
 def glow_effect(img):
     img2 = cv.GaussianBlur(img, ksize=(21, 21), sigmaX=5, sigmaY=5)
     out = img2
     out[img>img2] = img[img>img2]
     return out
+
 
 def cvtBRG_to_HLScube(bgr):
     hls = cv.cvtColor(bgr, cv.COLOR_BGR2HLS)
@@ -127,13 +145,13 @@ def neon_effect2(hits, colors, brigther_factor=2, glow_size1=3):
     # bgr to hls, shape (1,1,3)
     mask_hls[:, :, 1] = light
 
-
     light.shape += (1,)
     mask_bgra = np.concatenate((
         cv.cvtColor(mask_hls, cv.COLOR_HLS2BGR),
         light,
     ), axis=2)
     return mask_bgra
+
 
 def neon_effect(hits, level, color_bgr, width=200, brigther_factor=10, glow_size1=3):
     H, W, = hits.shape
@@ -165,6 +183,14 @@ def neon_effect(hits, level, color_bgr, width=200, brigther_factor=10, glow_size
         light,
     ), axis=2)
     return mask_bgra
+
+
+# @vectorize(['uint8(uint8, uint8)'], target="cpu")
+def add_saturate_uint8(bgr0, bgr1):
+    out = bgr0 + bgr1
+    if out < bgr0:
+        out = 255
+    return out
 
 
 def compute_gradient(hits):
