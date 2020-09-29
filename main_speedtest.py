@@ -4,12 +4,17 @@ import juliaset
 
 def juliaset_perf(location):
     """
+    python38 is like 15% faster than conda python36
+    using cuda on small images doesn't worth it
+
     dim_xy = (100, 100)
     supersampling = 3
     max_iter = 8196
-        juliaset_vectorized     1227 Mi/s -> score 9.1
-        juliaset_njit            218 Mi/s -> score 8.3
-        juliaset_numpy           0.8 Mi/s -> score 5.9
+        juliaset_vectorized             1227 Mi/s -> score: 9.1
+        juliaset_vectorized (cuda)       523 Mi/s -> score: 8.7
+        juliaset_trapped_guvectorized    235 Mi/s -> score: 8.4
+        juliaset_njit                    218 Mi/s -> score: 8.3
+        juliaset_numpy                   0.8 Mi/s -> score: 5.9
     """
     # to measure image computation time
     dim_xy = (100, 100)
@@ -17,6 +22,7 @@ def juliaset_perf(location):
     max_iter = 8196
 
     julia_func = juliaset.juliaset_vectorized
+    # julia_func = juliaset.juliaset_trapped_guvectorized
     # julia_func = juliaset.juliaset_njit
     # julia_func = juliaset.juliaset_numpy
 
@@ -70,6 +76,9 @@ def juliaset_perf(location):
     tic1 = time.time()
     dt = tic1 - tic0 - transform_dt - transfer_dt
 
+    if isinstance(julia_hits, tuple):
+        # julia traps returns multiple arrays. We keep only the standar julia_hits
+        julia_hits = julia_hits[0]
     N = supersampling**2 * np.sum(julia_hits)
     print(N, "iteration in", dt, "seconds")
     print(int(N/dt/1e6), "Mi/s")

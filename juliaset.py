@@ -1,7 +1,7 @@
 import numpy as np
 import time
 import utils
-from numba import njit, jit, vectorize
+from numba import njit, jit, vectorize, guvectorize, float64, int64
 
 
 @njit
@@ -17,6 +17,7 @@ def apply_fisheye(x, y, z, fisheye_factor):
     y1 = y
     z1 = z + (x*x + y*y)*fisheye_factor
     return x1, y1, z1
+
 
 @njit
 def apply_rotation(x, y, z, r_mat):
@@ -49,6 +50,7 @@ def compute_mandelbrot_pixel(x, y, max_iter):
         hit += 1
     return hit
 
+
 # @njit
 # def screen_space_to_zoom_space(dim_xy, pos_xy, zoom, r_mat, pos_screen_xy):
 #     W, H = dim_xy
@@ -64,6 +66,7 @@ def compute_mandelbrot_pixel(x, y, max_iter):
 #     x, y, z = apply_rotation(x, y, z, r_mat)
 #     x, y, z = apply_translation(x, y, z, pos_xyz)
 #     return x, y, z
+
 
 def cartesian_space_to_screen(dim_xy, pos_xy, zoom, r_mat, pos_cart_xy):
     """
@@ -86,7 +89,6 @@ def cartesian_space_to_screen(dim_xy, pos_xy, zoom, r_mat, pos_cart_xy):
     :param pos_cart_xy:
     :return:
     """
-
 
 
 @njit
@@ -185,6 +187,7 @@ def juliaset_numpy(dim_xy, pos_xy, zoom, r_mat, constant_xy, supersampling=1, fi
             julia_hits = np.min((julia_hits, hits), axis=0)
     return julia_hits
 
+
 @njit
 def compute_julia_pixel(x, y, constant_xy, max_iter):
     hit = 0
@@ -245,6 +248,92 @@ def compute_julia_pixel_vectorized(x, y, constant_x, constant_y, max_iter):
         hit += 1
     return hit
 
+
+# @vectorize(['Tuple((float64, float64))(float64, float64, float64, float64, int64)'], target="cpu")
+# def compute_julia_pixel_and_dist_vectorized(x, y, constant_x, constant_y, max_iter):
+@guvectorize([(
+        float64[:], float64[:], float64, float64, int64[:],
+        int64[:], float64[:], float64[:]
+    )], '(n),(n),(),(),(n)->(n),(n),(n)')
+def compute_julia_traps_pixel_guvectorized(x, y, constant_x, constant_y, max_iter, out_hit, out_dist, out_theta):
+    for i in range(x.shape[0]):
+        x_i = x[i]
+        y_i = y[i]
+        max_iter_i = max_iter[i]
+
+        hit = 0
+        x2 = x_i * x_i
+        y2 = y_i * y_i
+        dist2 = x2 + y2
+        min_dist = dist2
+        min_dist_x = y_i
+        min_dist_y = x_i
+        while dist2 < 4 and hit < max_iter_i:
+            y_i = (x_i+x_i) * y_i + constant_y
+            x_i = x2 - y2 + constant_x
+            y2 = y_i*y_i
+            x2 = x_i*x_i
+            dist2 = x2 + y2
+            if dist2 < min_dist:
+                min_dist = dist2
+                min_dist_x = x_i
+                min_dist_y = y_i
+            hit += 1
+        # return hit, (min_dist**0.5)
+        out_hit[i] = hit
+        out_dist[i] = (min_dist**0.5)
+        out_theta[i] = np.arctan2(min_dist_x, min_dist_y)
+
+
+# comment decorator for cuda
+@jit(parallel=True, target='cpu')
+def juliaset_trapped_guvectorized(dim_xy, pos_xy, zoom, r_mat, constant_xy, supersampling=1, fisheye_factor=0, max_iter=1024):
+    """
+    compute juliaset with orbital traps
+    """
+    W, H = dim_xy
+    pos_xyz = pos_xy + (zoom,)
+    size = max(W, H)
+    px_size = 2 / size
+    sub_px_size = px_size / supersampling
+
+    constant_xy = [float(c) for c in constant_xy]
+
+    dx = min(1.0, W / H)
+    dy = min(1.0, H / W)
+    julia_hits = np.zeros(shape=(H, W), dtype=np.int64) + max_iter
+    julia_trap_magn = np.zeros(shape=(H, W), dtype=np.float64) + 2
+    julia_trap_phase = np.zeros(shape=(H, W), dtype=np.float64)
+
+    hits = np.zeros(shape=(H, W), dtype=np.int64) + max_iter
+    trap_magn = np.zeros(shape=(H, W), dtype=np.float64) + 2
+    trap_phase = np.zeros(shape=(H, W), dtype=np.float64)
+
+    for super_j in range(supersampling):
+        for super_i in range(supersampling):
+            mesh_x = np.zeros(shape=(H, W), dtype=np.float64)
+            mesh_y = np.zeros(shape=(H, W), dtype=np.float64)
+            for j in range(H):
+                # print(100*j/H, "%")
+                for i in range(W):
+                    y = -dy + j * px_size + super_j * sub_px_size
+                    x = -dx + i * px_size + super_i * sub_px_size
+                    z = 0
+                    x, y, z = apply_fisheye(x, y, z, fisheye_factor)
+                    x, y, z = apply_rotation(x, y, z, r_mat)
+                    x, y, z = apply_translation(x, y, z, pos_xyz)
+                    x, y = zoom_space_to_cartesian(x, y, z, pos_xyz[0], pos_xyz[1])
+                    mesh_x[j, i] = x
+                    mesh_y[j, i] = y
+
+            compute_julia_traps_pixel_guvectorized(mesh_x, mesh_y, constant_xy[0], constant_xy[1], julia_hits, hits, trap_magn, trap_phase)
+            updated_hits_mask = hits < julia_hits
+            julia_trap_magn[updated_hits_mask] = trap_magn[updated_hits_mask]
+            julia_trap_phase[updated_hits_mask] = trap_phase[updated_hits_mask]
+            julia_hits = hits.copy()
+    return julia_hits, julia_trap_magn, julia_trap_phase
+
+
 # comment decorator for cuda
 @jit(parallel=True, target='cpu')
 def juliaset_vectorized(dim_xy, pos_xy, zoom, r_mat, constant_xy, supersampling=1, fisheye_factor=0, max_iter=1024):
@@ -301,6 +390,7 @@ def mandelbrotset(dim_xy, pos_xy, zoom, r_mat, max_iter=1024):
             mandelbrot_hits[j, i] = compute_mandelbrot_pixel(x, y, max_iter)
     return mandelbrot_hits
 
+
 def get_initial_values():
     dim_xy = (500, 500)
     pos_julia_xy = (0, 0)
@@ -308,6 +398,7 @@ def get_initial_values():
     r_mat = np.eye(3)
     constant_xy = (-0.8372, -0.1939)  # constant is the position xy of mandelbrot
     return dim_xy, pos_julia_xy, zoom, r_mat, constant_xy
+
 
 def main():
     # juliaset((-1, 0), (-0.8372, -0.1939), (1000, 1000), 0.5)
