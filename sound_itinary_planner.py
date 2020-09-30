@@ -74,7 +74,8 @@ class Itinary:
         self.load_sidechain()
 
         self.full_itinary = None
-        self.generate_full_itinary()
+        self.sparse_itinary = None
+        self.generate_itinaries()
         print("ok")
 
     def compute_frame_nb(self):
@@ -160,18 +161,19 @@ class Itinary:
                   f"{len(self.locations)} != {len(self.music_map.LOCATIONS_BEATS)}")
             raise Exception
 
-        # convert totation matrix to np array
+        # convert rotation matrix to np array
         for k in range(len(self.locations)):
             self.locations[k]["r_mat"] = np.array(self.locations[k]["r_mat"])
 
-    def generate_full_itinary(self):
-        print("generate_full_itinary")
+    def generate_itinaries(self):
+        print("generate_itinaries")
         tic0 = time.time()
         bps = self.music_map.BPM/60
         locations_at_frame = [int(round(self.fps*(beat-1)/bps)) for beat in self.music_map.LOCATIONS_BEATS]
 
         k = 0
         self.full_itinary = []
+        self.sparse_itinary = []
         prev_loc = self.locations[0]
         for i in range(len(self.locations) - 1):
             locA = self.locations[i]
@@ -196,11 +198,14 @@ class Itinary:
                 xyz0 = np.append(loc["pos_julia_xy"], loc["zoom"])
                 xyz1 = np.append(prev_loc["pos_julia_xy"], prev_loc["zoom"])
                 velocity = np.sum((xyz1 - xyz0) ** 2) ** 0.5 * self.fps
-                loc["fisheye"] = -velocity
+                loc["velocity"] = velocity
 
                 self.full_itinary.append(loc)
+                if j == 0:
+                    self.sparse_itinary.append(loc)
                 prev_loc = loc.copy()
                 k += 1
+        self.sparse_itinary.append(loc)
 
     @staticmethod
     def interpolate_locations(locA, locB, t):
