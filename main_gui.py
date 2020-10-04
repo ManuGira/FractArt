@@ -48,8 +48,7 @@ class FractalExplorer:
         self.time_per_px = None
         self.max_iter = 1024*8
 
-        self.texture = fractal_painter.load_texture('assets/peroquet.jpg')
-        # self.texture = fractal_painter.load_texture('assets/hsl.png')
+        self.fp = fractal_painter.FractalPainter(self.max_iter, colorbar_path='assets/colorbar.png', texture_path='assets/peroquet.jpg')
 
         # run juliaset function once to compile them
         juliaset.juliaset_trapped_guvectorized((1, 1), self.pos_julia_xy, self.zoom_julia, self.r_mat, self.pos_mandel_xy)
@@ -82,18 +81,25 @@ class FractalExplorer:
 
 
     def update_julia_display(self):
-        # self.julia_display = fractal_painter.color_map((self.julia_trap_magn * 8000 / 2).astype(np.uint16), self.max_iter)
-        # self.julia_display = fractal_painter.color_map(((self.julia_trap_phase/(2*np.pi) + 0.5) * 8000 / 2).astype(np.uint16), self.max_iter)
-        phase01 = self.julia_trap_phase/(2*np.pi) + 0.5
-        magn01 = self.julia_trap_magn*np.log(self.julia_hits+1)
-        self.julia_display = fractal_painter.texture_map(phase01*10, magn01, self.texture)
-        # self.julia_display = fractal_painter.glow_effect(self.julia_display)
+        self.julia_display = self.fp.paint_texture(
+            self.julia_hits,
+            self.julia_trap_magn,
+            self.julia_trap_phase,
+            gradient_factor=1,
+            use_glow_effect=True,
+            use_fake_supersampling=True,
+        )
         H, W = self.julia_display.shape[:2]
         cv.line(self.julia_display, (W // 2, 48 * H // 100), (W // 2, 52 * H // 100), (0, 127, 127))
         cv.line(self.julia_display, (48 * W // 100, H // 2), (52 * W // 100, H // 2), (0, 127, 127))
 
     def update_mandel_display(self):
-        self.mandel_display = fractal_painter.color_map(self.mandel_hits, self.max_iter)
+        self.mandel_display = self.fp.paint_colorbar(
+            self.mandel_hits,
+            gradient_factor=1,
+            use_glow_effect=True,
+            use_fake_supersampling=True,
+        )
         H, W = self.mandel_display.shape[:2]
         cv.line(self.mandel_display, (W//2, 48*H//100), (W//2, 52*H//100), (0, 127, 127))
         cv.line(self.mandel_display, (48*W//100, H//2), (52*W//100, H//2), (0, 127, 127))

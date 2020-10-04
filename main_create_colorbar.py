@@ -41,7 +41,11 @@ class ViewContext:
         self.color_pickers_div = [ComponentContext(f'color-picker-div-{k}-id', '') for k in range(self.nb_color)]
 
         self.julia_hits = None
+        self.julia_trap_magn = None
+        self.julia_trap_phase = None
         self.load_julia_hits()
+
+        self.fp = fractal_painter.FractalPainter(self.MAX_ITER, colorbar_path='./assets/colorbar.png')
 
         self.app = None
         self.init_dash_app(process_name)
@@ -63,9 +67,13 @@ class ViewContext:
             self.nb_color = 10
             self.sliders_values = [170, 282, 297, 317, 231, 248, 267, 238, 327, 1024]
             self.colors = ['#000000', '#FF00BD', '#f09cf8', '#000000', '#1570ec', '#9dc2f4', '#000000', '#000000', '#20f8f0', '#000000']
+
     def load_julia_hits(self):
-        with open(pth(ViewContext.IMAGE_DIRECTORY, "7865.pkl"), "rb") as pickle_in:
+        with open(pth(ViewContext.IMAGE_DIRECTORY, "9.pkl"), "rb") as pickle_in:
             self.julia_hits = pickle.load(pickle_in)
+        if isinstance(self.julia_hits, tuple):
+            self.julia_hits, self.julia_trap_magn, self.julia_trap_phase = self.julia_hits
+
         self.julia_hits = fractal_painter.fake_supersampling(self.julia_hits)
         max_iter = ViewContext.MAX_ITER
         self.julia_hits[self.julia_hits > max_iter - 1] = max_iter - 1
@@ -127,8 +135,10 @@ class ViewContext:
         return plot
 
     def make_dash_painted_fractal(self):
-        julia_bgr = fractal_painter.apply_color_map(self.julia_hits, self.colorbar_bgr)
-        cv.imwrite(f"{ViewContext.IMAGE_DIRECTORY}fractal.png", julia_bgr)
+        self.fp.colorbar = fractal_painter.load_colorbar(f"{ViewContext.IMAGE_DIRECTORY}/colorbar.png")
+        julia_bgr = self.fp.paint_colorbar(self.julia_hits*2, gradient_factor=1, use_glow_effect=True)
+        # julia_bgr = fractal_painter.apply_color_map(self.julia_hits, self.colorbar_bgr)
+        cv.imwrite(f"{ViewContext.IMAGE_DIRECTORY}/fractal.png", julia_bgr)
         plot = dcc.Graph(figure=go.Figure(go.Image(z=julia_bgr[:, :, ::-1])))
         return plot
 

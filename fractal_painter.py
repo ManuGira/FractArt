@@ -2,14 +2,81 @@ import numpy as np
 from numba import njit
 import cv2 as cv
 
+class FractalPainter:
+    def __init__(self, max_iter, colorbar_path=None, texture_path=None):
+        self.max_iter = max_iter
+        if colorbar_path is not None:
+            self.colorbar = load_colorbar(colorbar_path)
+        if texture_path is not None:
+            self.texture = load_texture(texture_path)
+
+    def paint_standard(self, julia_hits, hits_offset=0, gradient_factor=0, use_glow_effect=False, use_fake_supersampling=False):
+        if use_fake_supersampling:
+            julia_hits = fake_supersampling(julia_hits)
+
+        if hits_offset != 0:
+            julia_hits += hits_offset
+            julia_hits[julia_hits > self.max_iter - 1] = self.max_iter - 1
+        julia_bgr = color_map(julia_hits, self.max_iter)
+
+        if gradient_factor != 0:
+            julia_bgr = add_gradient(julia_bgr, julia_hits, gradient_factor)
+
+        if use_glow_effect:
+            julia_bgr = glow_effect(julia_bgr)
+        return julia_bgr
+
+    def paint_colorbar(self, julia_hits, hits_offset=0, gradient_factor=0, use_glow_effect=False, use_fake_supersampling=False):
+        if use_fake_supersampling:
+            julia_hits = fake_supersampling(julia_hits)
+
+        if hits_offset != 0:
+            julia_hits += hits_offset
+            julia_hits[julia_hits > self.max_iter - 1] = self.max_iter - 1
+        julia_bgr = apply_color_map(julia_hits, self.colorbar)
+
+        if gradient_factor != 0:
+            julia_bgr = add_gradient(julia_bgr, julia_hits, gradient_factor)
+
+        if use_glow_effect:
+            julia_bgr = glow_effect(julia_bgr)
+        return julia_bgr
+
+    def paint_texture(self, julia_hits, julia_trap_magn, julia_trap_phase, hits_offset=0, gradient_factor=0, use_glow_effect=False, use_fake_supersampling=False):
+        if use_fake_supersampling:
+            julia_hits = fake_supersampling(julia_hits)
+
+        julia_hits += hits_offset
+        julia_hits[julia_hits > self.max_iter - 1] = self.max_iter - 1
+        phase01 = julia_trap_phase / (2 * np.pi) + 0.5
+        magn01 = julia_trap_magn * np.log(julia_hits + 1)
+
+        julia_bgr = texture_map(phase01, magn01, self.texture)
+
+        if gradient_factor != 0:
+            julia_bgr = add_gradient(julia_bgr, julia_hits, gradient_factor)
+
+        if use_glow_effect:
+            julia_bgr = glow_effect(julia_bgr)
+
+        return julia_bgr
+
 
 @njit
 def apply_color_map(hits, color_map):
+    """
+    :param hits: np array of int values
+    :param color_map: (N x 1 x 3) np array
+    :return: painted img
+    """
+
     H, W = hits.shape
+    N, _, _ = color_map.shape
     out = np.zeros(shape=(H, W, 3), dtype=np.uint8)
     for j in range(H):
         for i in range(W):
-            bgr = color_map[hits[j, i]]
+            k = hits[j, i] % N
+            bgr = color_map[k]
             out[j, i, :] = bgr
     return out
 
@@ -61,6 +128,19 @@ def color_map(hits, max_iter):
     #     color_map[int(maxhit*self.light_effect), :] = [255, 255, 255]
     color_map.shape = (N, 1, 3)
     return apply_color_map(hits, color_map)
+
+
+def load_colorbar(path):
+    """
+    load a colorbar from an image (it takes the first line of pixel of the image)
+    :param path: path to colorbar image
+    :return: (Nx3) np array
+    """
+    colorbar = cv.imread(path)
+    colorbar = colorbar[0:1, :, :]
+    # turn colorbar shape from (1, N, 3) to (N, 1, 3)
+    colorbar = np.reshape(colorbar, newshape=(-1, 1, 3))
+    return colorbar
 
 
 def load_texture(path):
@@ -193,12 +273,41 @@ def add_saturate_uint8(bgr0, bgr1):
     return out
 
 
-def compute_gradient(hits):
+def add_gradient(bgr, hits, gradient_factor):
+    # compute gradient
+    gradient_xy = compute_gradient(hits)
+
+    # merge gradient to bgr
+    hls = cvtBRG_to_HLScube(bgr)
+    hls[:, :, 1] = hls[:, :, 1] + gradient_xy[:, :, 0] * gradient_factor
+    hls[hls > 1] = 1
+    hls[hls < 0] = 0
+    bgr = cvtHLScube_to_BGR(hls)
+    return bgr
+
+def compute_gradient(hits, normalizing_threshold=64):
+    """
+
+    :param hits: (M x N) np array of integer
+    :param normalizing_threshold: normalizing and clipping threshold. Lower threshold will increase gradient effects.
+    :return: (M x N) np array of type float64
+    """
     H, W = hits.shape
-    out = np.zeros(shape=(H, W, 2), dtype=hits.dtype)
-    out[:, :, 0] = cv.filter2D(hits.astype(float), cv.CV_64F, np.array([[-1, 1]]))
-    out[:, :, 1] = cv.filter2D(hits.astype(float), cv.CV_64F, np.array([-1, 1]))
-    return out
+    gradient_xy = np.zeros(shape=(H, W, 2), dtype=hits.dtype)
+    gradient_xy[:, :, 0] = cv.filter2D(hits.astype(float), cv.CV_64F, np.array([[-1, 1]]))
+    gradient_xy[:, :, 1] = cv.filter2D(hits.astype(float), cv.CV_64F, np.array([-1, 1]))
+
+    # compute gradient magnitude
+    grad_magn = np.sqrt(gradient_xy[:, :, 0] ** 2 + gradient_xy[:, :, 1] ** 2)
+    grad_magn.shape += (1,)
+    grad_magn = np.repeat(grad_magn, repeats=2, axis=2)
+
+    # clip gradient magnitude to threshold
+    mask = grad_magn > normalizing_threshold
+    gradient_xy[mask] = normalizing_threshold * gradient_xy[mask] / grad_magn[mask]
+    gradient_xy = gradient_xy.astype(np.float64) / normalizing_threshold
+
+    return gradient_xy
 
 
 def blend(bgras):
