@@ -72,10 +72,10 @@ def load_texture(path):
 
 
 def texture_map(mesh_x, mesh_y, texture):
-    D = texture.shape[0]
-    mesh_u = (np.mod(mesh_x, 1)*D).astype(np.float32)
-    mesh_v = (np.mod(mesh_y, 1)*D).astype(np.float32)
-    out = cv.remap(texture, mesh_u, mesh_v, cv.INTER_NEAREST)
+    H, W = texture.shape[:2]
+    mesh_u = (np.mod(mesh_x, 1)*W).astype(np.float32)
+    mesh_v = (np.mod(mesh_y, 1)*H).astype(np.float32)
+    out = cv.remap(texture, mesh_u, mesh_v, cv.INTER_LINEAR)
     return out
 
 
