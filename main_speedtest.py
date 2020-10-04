@@ -10,19 +10,19 @@ def juliaset_perf(location):
     dim_xy = (100, 100)
     supersampling = 3
     max_iter = 8196
-        juliaset_vectorized             1227 Mi/s -> score: 9.1
-        juliaset_vectorized (cuda)       523 Mi/s -> score: 8.7
-        juliaset_trapped_guvectorized    235 Mi/s -> score: 8.4
-        juliaset_njit                    218 Mi/s -> score: 8.3
-        juliaset_numpy                   0.8 Mi/s -> score: 5.9
+        juliaset_vectorized             1392 Mi/s -> score:  9.1
+        juliaset_trapped_guvectorized   1000 Mi/s -> score:  9.0
+        juliaset_vectorized (cuda)       523 Mi/s -> score:  8.7
+        juliaset_njit                    218 Mi/s -> score:  8.3
+        juliaset_numpy                   0.8 Mi/s -> score:  5.9
     """
     # to measure image computation time
     dim_xy = (100, 100)
     supersampling = 3
     max_iter = 8196
 
-    julia_func = juliaset.juliaset_vectorized
-    # julia_func = juliaset.juliaset_trapped_guvectorized
+    # julia_func = juliaset.juliaset_vectorized
+    julia_func = juliaset.juliaset_trapped_guvectorized
     # julia_func = juliaset.juliaset_njit
     # julia_func = juliaset.juliaset_numpy
 
@@ -87,7 +87,7 @@ def juliaset_perf(location):
     return score
 
 def main():
-    location = {'pos_julia_xy':(-0.07015860596076647,-0.050134045790274674),'zoom':6,'r_mat':np.array([[0.99985864,0.,0.0168139,0.],[0.,1.,0.,0.],[-0.0168139,0.,0.99985864,0.],[0.,0.,0.,1.]]),'pos_mandel_xy':(-0.8408004442917478,-0.19367697713854448),'fisheye_factor':-0.9999999999999991,'time_per_px':3.9491994177246095e-07}
+    location = {'pos_julia_xy':(-0.07015860596076647,-0.050134045790274674),'zoom':6.0,'r_mat':np.array([[0.99985864,0.,0.0168139,0.],[0.,1.,0.,0.],[-0.0168139,0.,0.99985864,0.],[0.,0.,0.,1.]]),'pos_mandel_xy':(-0.8408004442917478,-0.19367697713854448),'fisheye_factor':-0.9999999999999991,'time_per_px':3.9491994177246095e-07}
     juliaset_perf(location)
 
 

@@ -1,7 +1,7 @@
 import numpy as np
 import time
 import utils
-from numba import njit, jit, vectorize, guvectorize, float64, int64
+from numba import njit, jit, vectorize, guvectorize
 
 
 @njit
@@ -249,13 +249,14 @@ def compute_julia_pixel_vectorized(x, y, constant_x, constant_y, max_iter):
     return hit
 
 
-# @vectorize(['Tuple((float64, float64))(float64, float64, float64, float64, int64)'], target="cpu")
-# def compute_julia_pixel_and_dist_vectorized(x, y, constant_x, constant_y, max_iter):
-@guvectorize([(
-        float64[:], float64[:], float64, float64, int64[:],
-        int64[:], float64[:], float64[:]
-    )], '(n),(n),(),(),(n)->(n),(n),(n)')
-def compute_julia_traps_pixel_guvectorized(x, y, constant_x, constant_y, max_iter, out_hit, out_dist, out_theta):
+@guvectorize(
+    ["f8[:], f8[:], f8, f8, i8[:], i8[:], f8[:], f8[:]"],
+    '(n),(n),(),(),(n)->(n),(n),(n)',
+    target='parallel')
+def compute_julia_traps_pixel_guvectorized(
+        x, y, constant_x, constant_y, max_iter,  # inputs
+        out_hit, out_dist, out_theta  # outputs
+):
     for i in range(x.shape[0]):
         x_i = x[i]
         y_i = y[i]
@@ -279,14 +280,11 @@ def compute_julia_traps_pixel_guvectorized(x, y, constant_x, constant_y, max_ite
                 min_dist_x = x_i
                 min_dist_y = y_i
             hit += 1
-        # return hit, (min_dist**0.5)
         out_hit[i] = hit
         out_dist[i] = (min_dist**0.5)
         out_theta[i] = np.arctan2(min_dist_x, min_dist_y)
 
 
-# comment decorator for cuda
-@jit(parallel=True, target='cpu')
 def juliaset_trapped_guvectorized(dim_xy, pos_xy, zoom, r_mat, constant_xy, supersampling=1, fisheye_factor=0, max_iter=1024):
     """
     compute juliaset with orbital traps
