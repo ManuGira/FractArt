@@ -1,3 +1,4 @@
+import os
 import webbrowser
 import dash
 import dash_core_components as dcc
@@ -11,6 +12,7 @@ from utils import pth
 import fractal_painter
 import cv2 as cv
 import pickle
+import json
 
 class ComponentContext:
     def __init__(self, id, val):
@@ -20,13 +22,16 @@ class ComponentContext:
 
 class ViewContext:
     PAGE_MAXWIDTH = 1000
-    IMAGE_DIRECTORY = './assets/'
+    IMAGE_DIRECTORY = './assets'
     MAX_ITER = 8196
 
     def __init__(self, process_name):
-        self.nb_color = 10
-        self.sliders_values = [170, 282, 297, 317, 231, 248, 267, 238, 327, 1024]
-        self.colors = ['#000000', '#FF00BD', '#f09cf8', '#000000', '#1570ec', '#9dc2f4', '#000000', '#000000', '#20f8f0', '#000000']
+        # todo: load and save pickle sliders_values
+        self.nb_color = None
+        self.sliders_values = None
+        self.colors = None
+        self.load_colorbar_json()
+
         self.current_slider = 0
         self.colorbar_bgr = np.zeros((1024, 3))
 
@@ -41,6 +46,23 @@ class ViewContext:
         self.app = None
         self.init_dash_app(process_name)
 
+    def load_colorbar_json(self):
+        colorbar_json_filepath = f"{ViewContext.IMAGE_DIRECTORY}/colorbar.json"
+        if os.path.exists(colorbar_json_filepath):
+            with open(colorbar_json_filepath, "r") as jsonfile:
+                ld = json.load(jsonfile)
+            self.nb_color = ld["nb_color"]
+            self.sliders_values = ld["sliders_values"]
+            self.colors = ld["colors"]
+
+            order = np.argsort(self.sliders_values)
+            self.sliders_values = [self.sliders_values[ind] for ind in order]
+            self.colors = [self.colors[ind] for ind in order]
+        else:
+            # default values
+            self.nb_color = 10
+            self.sliders_values = [170, 282, 297, 317, 231, 248, 267, 238, 327, 1024]
+            self.colors = ['#000000', '#FF00BD', '#f09cf8', '#000000', '#1570ec', '#9dc2f4', '#000000', '#000000', '#20f8f0', '#000000']
     def load_julia_hits(self):
         with open(pth(ViewContext.IMAGE_DIRECTORY, "7865.pkl"), "rb") as pickle_in:
             self.julia_hits = pickle.load(pickle_in)
@@ -93,7 +115,13 @@ class ViewContext:
 
         colorbar = cv.resize(colorbar, dsize=(1024, 100), interpolation=cv.INTER_NEAREST)
 
-        cv.imwrite(f"{ViewContext.IMAGE_DIRECTORY}colorbar.png", colorbar[:, :, ::-1])
+        cv.imwrite(f"{ViewContext.IMAGE_DIRECTORY}/colorbar.png", colorbar[:, :, ::-1])
+        with open(f"{ViewContext.IMAGE_DIRECTORY}/colorbar.json", 'w') as jsonfile:
+            json.dump({
+                "nb_color": self.nb_color,
+                "sliders_values": self.sliders_values,
+                "colors": self.colors,
+            }, jsonfile)
 
         plot = dcc.Graph(figure=go.Figure(go.Image(z=colorbar)))
         return plot
