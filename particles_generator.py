@@ -58,12 +58,12 @@ class ParticleSystem:
         # stars on the center of the zoom shouldn't be visible
         brightness *= 1-np.exp(-10*np.sum(pos_plan_xy**2, axis=1))
         brightness = brightness.astype(np.uint8)
-        print(max(brightness))
+        # print(max(brightness))
 
         # radius decrease with distance
         radius = 1 / distance_to_viewer
 
-        # reder on screen
+        # render on screen
         self.screen = (self.screen.astype(float)*0.8).astype(np.uint8)
         for i in range(len(pos_screen_xy)):
             x, y = pos_screen_xy[i]
@@ -74,7 +74,9 @@ class ParticleSystem:
 
 if __name__ == '__main__':
     ps = ParticleSystem([1000, 1000], 1000)
+    fps = 60
+    velocity_xyz = [0, 0, 1]
     for k in range(200):
         utils.imshow(ps.screen, ms=10)
-        ps.update([0, 0, 1], 0.005)
+        ps.update(velocity_xyz, 0.1/fps)
 

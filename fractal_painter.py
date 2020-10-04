@@ -268,8 +268,9 @@ def neon_effect(hits, level, color_bgr, width=200, brigther_factor=10, glow_size
 # @vectorize(['uint8(uint8, uint8)'], target="cpu")
 def add_saturate_uint8(bgr0, bgr1):
     out = bgr0 + bgr1
-    if out < bgr0:
-        out = 255
+    out[out < bgr0] = 255
+    # if out < bgr0:
+    #     out = 255
     return out
 
 

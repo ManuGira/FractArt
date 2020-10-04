@@ -197,8 +197,8 @@ class Itinary:
 
                 xyz0 = np.append(loc["pos_julia_xy"], loc["zoom"])
                 xyz1 = np.append(prev_loc["pos_julia_xy"], prev_loc["zoom"])
-                velocity = np.sum((xyz1 - xyz0) ** 2) ** 0.5 * self.fps
-                loc["velocity"] = velocity
+                velocity_vector = xyz1 - xyz0
+                loc["velocity_vector"] = velocity_vector
 
                 self.full_itinary.append(loc)
                 if j == 0:
