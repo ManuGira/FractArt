@@ -250,8 +250,8 @@ def compute_julia_pixel_vectorized(x, y, constant_x, constant_y, max_iter):
 
 
 @guvectorize(
-    ["f8[:], f8[:], f8, f8, i8[:], i8[:], f8[:], f8[:]"],
-    '(n),(n),(),(),(n)->(n),(n),(n)',
+    ["f8[:], f8[:], f8, f8, i8, i8[:], f8[:], f8[:]"],
+    '(n),(n),(),(),()->(n),(n),(n)',
     target='parallel')
 def compute_julia_traps_pixel_guvectorized(
         x, y, constant_x, constant_y, max_iter,  # inputs
@@ -260,7 +260,6 @@ def compute_julia_traps_pixel_guvectorized(
     for i in range(x.shape[0]):
         x_i = x[i]
         y_i = y[i]
-        max_iter_i = max_iter[i]
 
         hit = 0
         x2 = x_i * x_i
@@ -269,7 +268,7 @@ def compute_julia_traps_pixel_guvectorized(
         min_dist = dist2
         min_dist_x = y_i
         min_dist_y = x_i
-        while dist2 < 4 and hit < max_iter_i:
+        while dist2 < 4 and hit < max_iter:
             y_i = (x_i+x_i) * y_i + constant_y
             x_i = x2 - y2 + constant_x
             y2 = y_i*y_i
@@ -324,11 +323,11 @@ def juliaset_trapped_guvectorized(dim_xy, pos_xy, zoom, r_mat, constant_xy, supe
                     mesh_x[j, i] = x
                     mesh_y[j, i] = y
 
-            compute_julia_traps_pixel_guvectorized(mesh_x, mesh_y, constant_xy[0], constant_xy[1], julia_hits, hits, trap_magn, trap_phase)
+            compute_julia_traps_pixel_guvectorized(mesh_x, mesh_y, constant_xy[0], constant_xy[1], max_iter, hits, trap_magn, trap_phase)
             updated_hits_mask = hits < julia_hits
             julia_trap_magn[updated_hits_mask] = trap_magn[updated_hits_mask]
             julia_trap_phase[updated_hits_mask] = trap_phase[updated_hits_mask]
-            julia_hits = hits.copy()
+            julia_hits[updated_hits_mask] = hits[updated_hits_mask]
     return julia_hits, julia_trap_magn, julia_trap_phase
 
 

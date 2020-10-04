@@ -11,7 +11,7 @@ def juliaset_perf(location):
     supersampling = 3
     max_iter = 8196
         juliaset_vectorized             1392 Mi/s -> score:  9.1
-        juliaset_trapped_guvectorized   1000 Mi/s -> score:  9.0
+        juliaset_trapped_guvectorized   1010 Mi/s -> score:  9.0
         juliaset_vectorized (cuda)       523 Mi/s -> score:  8.7
         juliaset_njit                    218 Mi/s -> score:  8.3
         juliaset_numpy                   0.8 Mi/s -> score:  5.9
