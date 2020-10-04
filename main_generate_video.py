@@ -35,7 +35,7 @@ def generate_video_from_folder(data_folder, fps):
 
     imgs_folder = pth(data_folder, "imgs")
     video_path = pth(data_folder, "juliaset.mp4")
-    img0 = cv.imread(pth(imgs_folder, "0.png"))
+    img0 = cv.imread(pth(imgs_folder, "7500.png"))
     H, W, _ = img0.shape
 
     # Define the codec and create VideoWriter object
@@ -45,7 +45,7 @@ def generate_video_from_folder(data_folder, fps):
     K = len(os.listdir(imgs_folder))
     frame_prev = img0*0
     t = 5
-    for k in range(K):
+    for k in range(7500, 8000):
         image_path = pth(imgs_folder, f"{k}.png")
 
         frame = cv.imread(image_path)
@@ -63,7 +63,7 @@ def generate_video_from_folder(data_folder, fps):
     out.release()
 
 
-def generate_images_from_hits(data_folder, full_itinary, max_iter, fps):
+def generate_images_from_hits(data_folder, full_itinary, max_iter, fps, style=None):
     PROFILER=False
 
     print("generate_images_from_hits: ", end="")
@@ -76,23 +76,27 @@ def generate_images_from_hits(data_folder, full_itinary, max_iter, fps):
 
     K = len(os.listdir(hits_folder))
     cmd = sound_itinary_planner.Itinary.get_smooth_trigger_from_full_itinary(full_itinary, "GHOST", fps, attack_s=0.1, release_rate=0.04)
+
     print(f"{K} hits matrices to paint")
     for k in range(K):
         with open(pth(hits_folder, f"{k}.pkl"), "rb") as pickle_in:
             julia_hits = pickle.load(pickle_in)
 
+        if isinstance(julia_hits, tuple):
+            julia_hits, julia_trap_magn, julia_trap_phase = julia_hits
+
         tic1 = time.time()
         julia_hits = fractal_painter.fake_supersampling(julia_hits)
 
         # compute gradient
-        gradient = fractal_painter.compute_gradient(julia_hits).astype(float)
-        grad_magn = np.sqrt(gradient[:, :, 0]**2 + gradient[:, :, 1]**2)
+        gradient_xy = fractal_painter.compute_gradient(julia_hits).astype(float)
+        grad_magn = np.sqrt(gradient_xy[:, :, 0]**2 + gradient_xy[:, :, 1]**2)
         grad_magn.shape += (1,)
         grad_magn = np.repeat(grad_magn, repeats=2, axis=2)
         threshold = 64  # the lower the stronger
         mask = grad_magn > threshold
-        gradient[mask] = threshold*gradient[mask]/grad_magn[mask]
-        gradient /= threshold
+        gradient_xy[mask] = threshold*gradient_xy[mask]/grad_magn[mask]
+        gradient_xy /= threshold
 
         # gdx = (128*gradient[:, :, 1]/threshold + 127).astype(np.uint8)
         # gdy = (128*gradient[:, :, 0]/threshold + 127).astype(np.uint8)
@@ -104,12 +108,59 @@ def generate_images_from_hits(data_folder, full_itinary, max_iter, fps):
         loc = full_itinary[k]
 
 
-        if True:
+        if style == "standard":
             julia_hits += int(5 * cmd[k])
             julia_hits[julia_hits > max_iter-1] = max_iter-1
             julia_bgr = fractal_painter.color_map(julia_hits, max_iter)
             julia_bgr = fractal_painter.glow_effect(julia_bgr)
-        else:
+
+            # merge gradient to bgr
+            julia_hls = fractal_painter.cvtBRG_to_HLScube(julia_bgr)
+            julia_hls[:, :, 1] = julia_hls[:, :, 1] + gradient_xy[:, :, 0] * cmd[k]
+            julia_hls[julia_hls > 1] = 1
+            julia_hls[julia_hls < 0] = 0
+            julia_bgr = fractal_painter.cvtHLScube_to_BGR(julia_hls)
+        elif style == "colorbar":
+            julia_hits += int(5 * cmd[k])
+            julia_hits[julia_hits > max_iter - 1] = max_iter - 1
+
+            # construct colorbar from colorbar.png image
+            cb_img = cv.imread('assets/colorbar.png')
+            cb_img = cb_img[0:1, :, :]
+            repeats = 1
+            colorbar_bgr = cv.resize(cb_img, (max_iter//repeats, 1))
+            colorbar_bgr = np.repeat(colorbar_bgr, repeats, 1)
+            colorbar_bgr = colorbar_bgr[0, :max_iter, :]
+
+            julia_bgr = fractal_painter.apply_color_map(julia_hits, colorbar_bgr)
+            julia_bgr = fractal_painter.glow_effect(julia_bgr)
+
+            # merge gradient to bgr
+            julia_hls = fractal_painter.cvtBRG_to_HLScube(julia_bgr)
+            julia_hls[:, :, 1] = julia_hls[:, :, 1] + gradient_xy[:, :, 0] * cmd[k]
+            julia_hls[julia_hls > 1] = 1
+            julia_hls[julia_hls < 0] = 0
+            julia_bgr = fractal_painter.cvtHLScube_to_BGR(julia_hls)
+
+        elif style == "texture":
+            # TODO
+            julia_hits += int(5 * cmd[k])
+            julia_hits[julia_hits > max_iter - 1] = max_iter - 1
+            phase01 = julia_trap_phase / (2 * np.pi) + 0.5
+            magn01 = julia_trap_magn * np.log(julia_hits + 1)
+
+            texture = cv.imread('assets/colorbar.png')
+            texture = cv.transpose(texture)
+            julia_bgr = fractal_painter.texture_map(phase01 * 10, magn01, texture)
+            # self.julia_display = fractal_painter.glow_effect(self.julia_display)
+
+            # merge gradient to bgr
+            julia_hls = fractal_painter.cvtBRG_to_HLScube(julia_bgr)
+            julia_hls[:, :, 1] = julia_hls[:, :, 1] + gradient_xy[:, :, 0] * cmd[k]
+            julia_hls[julia_hls > 1] = 1
+            julia_hls[julia_hls < 0] = 0
+            julia_bgr = fractal_painter.cvtHLScube_to_BGR(julia_hls)
+        elif style == "neon":
             width = 30 + 3*loc["sidechains"]["GHOST"]["volume"]
 
             # TODO: trigger a new color on each GHOST.wav hit.
@@ -126,13 +177,6 @@ def generate_images_from_hits(data_folder, full_itinary, max_iter, fps):
             tic2 = time.time()
             julia_bgr = fractal_painter.neon_effect2(julia_hits, colors, brigther_factor=quadratic_scale)
             print(f", neon_effect2: {time.time()-tic2:.4f}s", end="") if PROFILER else None
-
-        # merge gradient to bgr
-        julia_hls = fractal_painter.cvtBRG_to_HLScube(julia_bgr)
-        julia_hls[:, :, 1] = julia_hls[:, :, 1] + gradient[:, :, 0]*cmd
-        julia_hls[julia_hls > 1] = 1
-        julia_hls[julia_hls < 0] = 0
-        julia_bgr = fractal_painter.cvtHLScube_to_BGR(julia_hls)
 
         tic3 = time.time()
         # cv.imwrite(pth(imgs_folder, f"{k}.png"), julia_bgr)
@@ -156,7 +200,7 @@ def estimate_computation_time(itinary, dim_xy, nb_inter_frame, supersampling):
 def generate_hits_from_itinary(data_folder, dim_xy, full_itinary, supersampling, max_iter):
     # run juliaset function once to compile it
     # juliaset.juliaset_njit((1, 1), (0, 0), 1, np.eye(3), (0, 0))
-    juliaset.juliaset_vectorized((1, 1), (0, 0), 1, np.eye(3), (0, 0))
+    juliaset.juliaset_trapped_guvectorized((1, 1), (0, 0), 1, np.eye(3), (0, 0))
 
     print("generate_hits_from_itinary")
     tic0 = time.time()
@@ -171,7 +215,7 @@ def generate_hits_from_itinary(data_folder, dim_xy, full_itinary, supersampling,
 
     k = 0
     N = len(full_itinary)
-    for i in range(N - 1):
+    for i in range(N):
         print(f"{i}/{N}: ", end="")
         tic1 = time.time()
         loc = full_itinary[i]
@@ -187,7 +231,7 @@ def generate_hits_from_itinary(data_folder, dim_xy, full_itinary, supersampling,
                 max_iter=max_iter,
             )
         else:
-            julia_hits = juliaset.juliaset_vectorized(
+            julia_hits = juliaset.juliaset_trapped_guvectorized(
                 dim_xy,
                 loc["pos_julia_xy"],
                 loc["zoom"],
@@ -204,14 +248,13 @@ def generate_hits_from_itinary(data_folder, dim_xy, full_itinary, supersampling,
     print(f"Total time: {time.time()-tic0:.1f}s")
 
 def main():
-    data_folder = "outputs/output3"
 
-    MODE = ["sketchy", "video LD", "video", "video HD", "poster"][-2]
+    MODE = ["sketchy", "video LD", "video", "video HD", "poster"][-1]
     if MODE == "sketchy":
         dim_xy = (72, 54)
         supersampling = 1
-        max_iter = 1024
-        fps = 10
+        max_iter = 8192
+        fps = 5
     elif MODE == "video LD":
         dim_xy = (720, 540)
         supersampling = 1
@@ -219,29 +262,30 @@ def main():
         fps = 10
     elif MODE == "video":
         dim_xy = (720, 540)
-        supersampling = 3
+        supersampling = 1
         max_iter = 8192
         fps = 30
     elif MODE == "video HD":
         dim_xy = (1920, 1080)
-        supersampling = 3
+        supersampling = 1
         max_iter = 8192
         fps = 60
     elif MODE == "poster":
-        dim_xy = (6000, 4500)
+        dim_xy = (600, 450)
         supersampling = 3
         max_iter = 8192
-        fps = 0
+        fps = 30
     else:
         dim_xy = (1, 1)
         supersampling = 1
         max_iter = 1
         fps = 0
 
-    itinary = sound_itinary_planner.Itinary(sound_itinary_planner.AnotherPlanetMap(), fps)
-    generate_hits_from_itinary(data_folder, dim_xy, itinary.full_itinary, supersampling, max_iter)
-    generate_images_from_hits(data_folder, itinary.full_itinary, max_iter, fps)
-    generate_video_from_folder(data_folder, fps)
+    data_folder = "outputs/output_posters"
+    itinary = sound_itinary_planner.Itinary(sound_itinary_planner.AnotherPlanetMap(), fps)  # todo: fix bug when fps=1
+    # generate_hits_from_itinary(data_folder, dim_xy, itinary.sparse_itinary, supersampling, max_iter)
+    generate_images_from_hits(data_folder, itinary.sparse_itinary, max_iter, fps, style="texture")
+    # generate_video_from_folder(data_folder, fps)
 
 if __name__ == '__main__':
     main()
