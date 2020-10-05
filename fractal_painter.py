@@ -1,5 +1,5 @@
 import numpy as np
-from numba import njit
+import numba
 import cv2 as cv
 
 class FractalPainter:
@@ -265,12 +265,14 @@ def neon_effect(hits, level, color_bgr, width=200, brigther_factor=10, glow_size
     return mask_bgra
 
 
-# @vectorize(['uint8(uint8, uint8)'], target="cpu")
+# @numba.vectorize('uint8(uint8, uint8)', locals={'out': numba.uint8}, target="cpu")
+# @numba.stencil('uint8(uint8, uint8)')
+@numba.vectorize('uint8(uint8, uint8)', target="parallel")
 def add_saturate_uint8(bgr0, bgr1):
     out = bgr0 + bgr1
-    out[out < bgr0] = 255
-    # if out < bgr0:
-    #     out = 255
+    # out[out < bgr0] = 255
+    if out > 255:
+        out = 255
     return out
 
 
@@ -337,7 +339,7 @@ def blend(bgras):
     out = np.concatenate((out_bgr, out_alpha), axis=2)
     return out
 
-@njit
+@numba.njit
 def fake_supersampling(julia_hits):
     out = np.zeros_like(julia_hits)
     H, W = out.shape
