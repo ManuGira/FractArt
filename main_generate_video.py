@@ -28,7 +28,13 @@ def progression_bar(k, K):
     elif condB:
         print(".", end="", flush=True)
 
-def generate_video_from_folder(data_folder, fps):
+def generate_video_from_folder(data_folder, fps, rng=None):
+    """
+    :param data_folder: source folder containing the hits folder
+    :param fps: targetted frame per seconds
+    :param rng: range of hits to compute images from (default None: will take all of them)
+    :return:
+    """
     if fps <= 0:
         print("fps must be a positive number")
     print("generate_video_from_folder: ")
@@ -43,10 +49,14 @@ def generate_video_from_folder(data_folder, fps):
     fourcc = cv.VideoWriter_fourcc(*'mp4v')  # Be sure to use lower case
     out = cv.VideoWriter(video_path, fourcc, fps, (W, H))
 
-    K = len(os.listdir(imgs_folder))
+    if rng is None:
+        k0 = 0
+        K = len(os.listdir(imgs_folder))
+    else:
+        k0, K = rng
     frame_prev = img0*0
     t = 5
-    for k in range(K):
+    for k in range(k0, K):
         image_path = pth(imgs_folder, f"{k}.png")
 
         frame = cv.imread(image_path)
@@ -58,13 +68,13 @@ def generate_video_from_folder(data_folder, fps):
 
         out.write(frame)  # Write out frame to video
 
-        progression_bar(k, K)
+        progression_bar(k, K-k0)
     print(f" {time.time()-tic:.4f}s")
     # Release everything if job is finished
     out.release()
 
 
-def generate_images_from_hits(data_folder, itinary, max_iter, fps, style=None, use_particles=False):
+def generate_images_from_hits(data_folder, itinary, max_iter, fps, style=None, use_particles=False, rng=None):
     PROFILER=False
 
     print("generate_images_from_hits: ", end="")
@@ -75,7 +85,12 @@ def generate_images_from_hits(data_folder, itinary, max_iter, fps, style=None, u
     if not os.path.exists(imgs_folder):
         os.makedirs(imgs_folder)
 
-    K = len([file for file in os.listdir(hits_folder) if file.endswith(".pkl")])
+    if rng is None:
+        K = len([file for file in os.listdir(hits_folder) if file.endswith(".pkl")])
+        k0 = 0
+    else:
+        k0, K = rng
+
     cmd = sound_itinary_planner.Itinary.get_smooth_trigger_from_full_itinary(itinary, "GHOST", fps, attack_s=0.1, release_rate=0.04)
 
     fp = fractal_painter.FractalPainter(max_iter, texture_path="./assets/peroquet.jpg", colorbar_path="./assets/colorbar.png")
@@ -89,8 +104,8 @@ def generate_images_from_hits(data_folder, itinary, max_iter, fps, style=None, u
         H, W = julia_hits.shape
         pg = particles_generator.ParticleSystem([H, W], 1000)
 
-    print(f"{K} hits matrices to paint")
-    for k in range(K):
+    print(f"{K-k0} hits matrices to paint")
+    for k in range(k0, K):
         with open(pth(hits_folder, f"{k}.pkl"), "rb") as pickle_in:
             julia_hits = pickle.load(pickle_in)
 
@@ -117,6 +132,16 @@ def generate_images_from_hits(data_folder, itinary, max_iter, fps, style=None, u
             )
         elif style == "texture":
             julia_bgr = fp.paint_texture(
+                julia_hits,
+                julia_trap_magn,
+                julia_trap_phase,
+                hits_offset=int(5 * cmd[k]),
+                gradient_factor=1,
+                use_glow_effect=True,
+                use_fake_supersampling=True,
+            )
+        elif style == "colorbarAsTexture":
+            julia_bgr = fp.paint_colorbar_as_texture(
                 julia_hits,
                 julia_trap_magn,
                 julia_trap_phase,
@@ -155,7 +180,7 @@ def generate_images_from_hits(data_folder, itinary, max_iter, fps, style=None, u
         cv.imwrite(pth(imgs_folder, f"{k}.png"), julia_bgr)
         print(f", imwrite: {time.time()-tic3:.4f}s", flush=True) if PROFILER else None
 
-        progression_bar(k, K)
+        progression_bar(k, K-k0)
     print(f" {time.time()-tic:.4f}s")
 
 
@@ -253,11 +278,16 @@ def main():
         max_iter = 1
         fps = 0
 
+    # rng = [1600, 1700]
+    # rng = [3231, 3331]
+    rng = [5800, 5900]
+
+
     data_folder = "outputs/output_video"
     itinary = sound_itinary_planner.Itinary(sound_itinary_planner.AnotherPlanetMap(), fps)
-    generate_hits_from_itinary(data_folder, dim_xy, itinary.full_itinary, supersampling, max_iter)
-    generate_images_from_hits(data_folder, itinary.full_itinary, max_iter, fps, style="colorbar", use_particles=True)
-    generate_video_from_folder(data_folder, fps)
+    # generate_hits_from_itinary(data_folder, dim_xy, itinary.full_itinary, supersampling, max_iter)
+    generate_images_from_hits(data_folder, itinary.full_itinary, max_iter, fps, style="colorbarAsTexture", use_particles=True, rng=rng)
+    generate_video_from_folder(data_folder, fps, rng=rng)
 
 if __name__ == '__main__':
     main()

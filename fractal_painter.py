@@ -11,6 +11,9 @@ class FractalPainter:
             self.texture = load_texture(texture_path)
 
     def paint_standard(self, julia_hits, hits_offset=0, gradient_factor=0, use_glow_effect=False, use_fake_supersampling=False):
+        """
+        Standard painting using an hardcoded colorbar
+        """
         if use_fake_supersampling:
             julia_hits = fake_supersampling(julia_hits)
 
@@ -27,6 +30,9 @@ class FractalPainter:
         return julia_bgr
 
     def paint_colorbar(self, julia_hits, hits_offset=0, gradient_factor=0, use_glow_effect=False, use_fake_supersampling=False):
+        """
+        Use the colorbar img passed in constructor (loaded with load_colorbar())
+        """
         if use_fake_supersampling:
             julia_hits = fake_supersampling(julia_hits)
 
@@ -43,6 +49,9 @@ class FractalPainter:
         return julia_bgr
 
     def paint_texture(self, julia_hits, julia_trap_magn, julia_trap_phase, hits_offset=0, gradient_factor=0, use_glow_effect=False, use_fake_supersampling=False):
+        """
+        Use the texture passed in costructor (loaded with load_texture())
+        """
         if use_fake_supersampling:
             julia_hits = fake_supersampling(julia_hits)
 
@@ -61,8 +70,33 @@ class FractalPainter:
 
         return julia_bgr
 
+    def paint_colorbar_as_texture(self, julia_hits, julia_trap_magn, julia_trap_phase, hits_offset=0, gradient_factor=0, use_glow_effect=False, use_fake_supersampling=False):
+        """
+        Paint using paint_colorbar(), and use the result as a texture for paint_texture
+        """
+        texture = self.paint_colorbar(
+            julia_hits,
+            hits_offset=hits_offset,
+            gradient_factor=0,
+            use_glow_effect=use_glow_effect,
+            use_fake_supersampling=use_fake_supersampling,
+        )
+        self.texture = format_texture(texture)
+        julia_bgr = self.paint_texture(
+            julia_hits,
+            julia_trap_magn,
+            julia_trap_phase,
+            hits_offset=0,
+            gradient_factor=gradient_factor,
+            use_glow_effect=use_glow_effect,
+            use_fake_supersampling=use_fake_supersampling,
+        )
+        return julia_bgr
 
-@njit
+
+
+
+@numba.njit
 def apply_color_map(hits, color_map):
     """
     :param hits: np array of int values
@@ -143,12 +177,15 @@ def load_colorbar(path):
     return colorbar
 
 
-def load_texture(path):
-    texture = cv.imread(path)
+def format_texture(texture):
     H, W, _ = texture.shape
     mx = max(H, W)
-    texture = cv.resize(texture, (mx, mx))
-    return texture
+    return cv.resize(texture, (mx, mx))
+
+
+def load_texture(path):
+    texture = cv.imread(path)
+    return format_texture(texture)
 
 
 def texture_map(mesh_x, mesh_y, texture):
@@ -173,6 +210,32 @@ def cvtBRG_to_HLScube(bgr):
     hls[:, :, 1] /= 255
     hls[:, :, 2] /= 255
     return hls
+
+
+# @vectorize(['(float64, float64, float64)(float64, float64, float64)'], target="cpu")
+def cvtBRG_to_HLScube_vectorized(b, g, r):
+    mx = max(b, g, r)
+    mn = min(b, g, r)
+    mxn = mx+mn
+
+    l = mxn/2
+
+    if (mx == mn):
+        return 0, l, 0
+
+    dmxn = mx-mn
+    s = dmxn/(2-mxn) if mxn > 1 else dmxn/mxn
+
+    if mx == b:
+        h = (r - g) / dmxn + 4
+    elif mx == g:
+        h = (b - r) / dmxn + 2
+    else:
+        h = (g - b) / dmxn
+        h = h+6 if g < b else h
+    h /= 6
+    return h, l, s
+
 
 def cvtHLScube_to_BGR(hls):
     hls[:, :, 0] *= 180
@@ -439,6 +502,37 @@ def main():
 
     cv.destroyAllWindows()
 
+def main2():
+    import time
+    img0 = cv.imread('outputs/output_posters/imgs/7.png', cv.IMREAD_GRAYSCALE)
+    img1 = cv.imread('outputs/output_posters/imgs/9.png', cv.IMREAD_GRAYSCALE)
+
+    # img0 = np.array([
+    #     [100, 100],
+    #     [100, 100]
+    # ], dtype=np.uint8)
+
+    # img1 = np.array([
+    #     [1, 200],
+    #     [255, 0]
+    # ], dtype=np.uint8)
+
+    img = add_saturate_uint8(img0, img1)
+    tic = time.time()
+    for k in range(100):
+        img = add_saturate_uint8(img0, img1)
+    toc = time.time()
+
+    print(toc-tic)
+
+    print(img)
+
+    # cv.imshow("img0", img0)
+    # cv.imshow("img1", img1)
+    # cv.imshow("img", img)
+
+    cv.waitKey(0)
+    cv.destroyAllWindows()
 
 if __name__ == '__main__':
-    main()
+    main2()
