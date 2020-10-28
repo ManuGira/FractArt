@@ -41,8 +41,9 @@ def generate_video_from_folder(data_folder, fps, rng=None):
     tic = time.time()
 
     imgs_folder = pth(data_folder, "imgs")
-    video_path = pth(data_folder, "juliaset.mp4")
-    img0 = cv.imread(pth(imgs_folder, "0.png"))
+    img0_path = next(i for i in os.listdir(imgs_folder) if i.endswith(".png"))
+    img0 = cv.imread(pth(imgs_folder, img0_path))
+    video_path = pth(data_folder, f"juliaset_{rng[0]}-{rng[1]}.mp4")
     H, W, _ = img0.shape
 
     # Define the codec and create VideoWriter object
@@ -86,17 +87,17 @@ def generate_images_from_hits(data_folder, itinary, max_iter, fps, style=None, u
         os.makedirs(imgs_folder)
 
     if rng is None:
-        K = len([file for file in os.listdir(hits_folder) if file.endswith(".pkl")])
+        k1 = len([file for file in os.listdir(hits_folder) if file.endswith(".pkl")])
         k0 = 0
     else:
-        k0, K = rng
+        k0, k1 = rng
 
     cmd = sound_itinary_planner.Itinary.get_smooth_trigger_from_full_itinary(itinary, "GHOST", fps, attack_s=0.1, release_rate=0.04)
 
     fp = fractal_painter.FractalPainter(max_iter, texture_path="./assets/peroquet.jpg", colorbar_path="./assets/colorbar.png")
 
     if use_particles:
-        with open(pth(hits_folder, f"{0}.pkl"), "rb") as pickle_in:
+        with open(pth(hits_folder, f"{k0}.pkl"), "rb") as pickle_in:
             julia_hits = pickle.load(pickle_in)
         if isinstance(julia_hits, tuple):
             julia_hits, julia_trap_magn, julia_trap_phase = julia_hits
@@ -104,8 +105,8 @@ def generate_images_from_hits(data_folder, itinary, max_iter, fps, style=None, u
         H, W = julia_hits.shape
         pg = particles_generator.ParticleSystem([H, W], 1000)
 
-    print(f"{K-k0} hits matrices to paint")
-    for k in range(k0, K):
+    print(f"{k1-k0} hits matrices to paint")
+    for k in range(k0, k1):
         with open(pth(hits_folder, f"{k}.pkl"), "rb") as pickle_in:
             julia_hits = pickle.load(pickle_in)
 
@@ -180,7 +181,7 @@ def generate_images_from_hits(data_folder, itinary, max_iter, fps, style=None, u
         cv.imwrite(pth(imgs_folder, f"{k}.png"), julia_bgr)
         print(f", imwrite: {time.time()-tic3:.4f}s", flush=True) if PROFILER else None
 
-        progression_bar(k, K-k0)
+        progression_bar(k, k1-k0)
     print(f" {time.time()-tic:.4f}s")
 
 
