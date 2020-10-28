@@ -1,7 +1,8 @@
 import numpy as np
 import time
 import utils
-from numba import njit, jit, vectorize, guvectorize
+from numba import njit, jit, vectorize, guvectorize, cuda
+import math
 
 
 @njit
@@ -248,6 +249,25 @@ def compute_julia_pixel_vectorized(x, y, constant_x, constant_y, max_iter):
         hit += 1
     return hit
 
+@cuda.jit
+def compute_julia_pixel_cuda_kernel(mesh_x, mesh_y, constant_x, constant_y, max_iter, out_hit):
+    i, j = cuda.grid(2)  # +
+    H, W = mesh_x.shape  # +
+    if 0 <= i < W and 0 <= j < H:   # +
+        x = mesh_x[j, i]  # +
+        y = mesh_y[j, i]  # +
+        mxi = max_iter[j, i]  # +
+        hit = 0
+        x2 = x * x
+        y2 = y * y
+        while x2 + y2 < 4 and hit < mxi:
+            y = (x+x) * y + constant_y
+            x = x2 - y2 + constant_x
+            y2 = y*y
+            x2 = x*x
+            hit += 1
+        out_hit[j, i] = hit  # +
+
 
 @guvectorize(
     ["f8[:], f8[:], f8, f8, i8, i8[:], f8[:], f8[:]"],
@@ -363,6 +383,48 @@ def juliaset_vectorized(dim_xy, pos_xy, zoom, r_mat, constant_xy, supersampling=
                     mesh_y[j, i] = y
             julia_hits = compute_julia_pixel_vectorized(mesh_x, mesh_y, constant_xy[0], constant_xy[1], julia_hits)
     return julia_hits
+
+
+def juliaset_cuda_kernel(dim_xy, pos_xy, zoom, r_mat, constant_xy, supersampling=1, fisheye_factor=0, max_iter=1024):
+    # TODO: this is not a trap version. Must implement orbital trap
+    W, H = dim_xy
+    pos_xyz = pos_xy + (zoom,)
+    size = max(W, H)
+    px_size = 2 / size
+    sub_px_size = px_size / supersampling
+
+    constant_xy = [float(c) for c in constant_xy]
+
+    threads_per_block = (32, 32)
+    blocks_per_grid_x = math.ceil(W / threads_per_block[0])
+    blocks_per_grid_y = math.ceil(H / threads_per_block[1])
+    blocks_per_grid = (blocks_per_grid_x, blocks_per_grid_y)
+
+    dx = min(1.0, W / H)
+    dy = min(1.0, H / W)
+    julia_hits = np.zeros(shape=(H, W), dtype=np.int64) + max_iter
+    hits = np.zeros(shape=(H, W), dtype=np.int64)
+    for super_j in range(supersampling):
+        for super_i in range(supersampling):
+            mesh_x = np.zeros(shape=(H, W), dtype=np.float64)
+            mesh_y = np.zeros(shape=(H, W), dtype=np.float64)
+            for j in range(H):
+                # print(100*j/H, "%")
+                for i in range(W):
+                    y = -dy + j * px_size + super_j * sub_px_size
+                    x = -dx + i * px_size + super_i * sub_px_size
+                    z = 0
+                    x, y, z = apply_fisheye(x, y, z, fisheye_factor)
+                    x, y, z = apply_rotation(x, y, z, r_mat)
+                    x, y, z = apply_translation(x, y, z, pos_xyz)
+                    x, y = zoom_space_to_cartesian(x, y, z, pos_xyz[0], pos_xyz[1])
+                    mesh_x[j, i] = x
+                    mesh_y[j, i] = y
+            compute_julia_pixel_cuda_kernel[blocks_per_grid, threads_per_block](mesh_x, mesh_y, constant_xy[0], constant_xy[1], julia_hits, hits)
+            julia_hits = hits.copy()
+    julia_trap_magn = np.zeros(shape=(H, W), dtype=np.float64)
+    julia_trap_phase = np.zeros(shape=(H, W), dtype=np.float64)
+    return julia_hits, julia_trap_magn, julia_trap_phase
 
 
 @jit(nopython=True, parallel=True)

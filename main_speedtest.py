@@ -21,8 +21,9 @@ def juliaset_perf(location):
     supersampling = 3
     max_iter = 8196
 
+    julia_func = juliaset.juliaset_cuda_kernel
     # julia_func = juliaset.juliaset_vectorized
-    julia_func = juliaset.juliaset_trapped_guvectorized
+    # julia_func = juliaset.juliaset_trapped_guvectorized
     # julia_func = juliaset.juliaset_njit
     # julia_func = juliaset.juliaset_numpy
 

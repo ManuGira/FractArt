@@ -197,6 +197,7 @@ def estimate_computation_time(itinary, dim_xy, nb_inter_frame, supersampling):
 def generate_hits_from_itinary(data_folder, dim_xy, full_itinary, supersampling, max_iter):
     # run juliaset function once to compile it
     # juliaset.juliaset_njit((1, 1), (0, 0), 1, np.eye(3), (0, 0))
+    # juliaset.juliaset_cuda_kernel((1, 1), (0, 0), 1, np.eye(3), (0, 0))
     juliaset.juliaset_trapped_guvectorized((1, 1), (0.0, 0.0), 1.0, np.eye(3), (0.0, 0.0))
 
     hits_folder = pth(data_folder, "hits")
@@ -216,6 +217,7 @@ def generate_hits_from_itinary(data_folder, dim_xy, full_itinary, supersampling,
         print(f"{i}/{N}: ", end="")
         tic1 = time.time()
         loc = full_itinary[i]
+        # julia_hits_trapped = juliaset.juliaset_cuda_kernel(
         julia_hits_trapped = juliaset.juliaset_trapped_guvectorized(
             dim_xy,
             loc["pos_julia_xy"],
