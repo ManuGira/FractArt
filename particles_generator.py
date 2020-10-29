@@ -17,7 +17,7 @@ class ParticleSystem:
         self.center_xy = (self.bounds_xyz[:2, 1] - self.bounds_xyz[:2, 0]).T / 2
 
         self.pos_xyz = self.space_mod(np.random.rand(N, 3)*self.span_xyz)
-        self.screen = np.zeros(shape=dim_xy, dtype=np.uint8)
+        self.screen = np.zeros(shape=dim_xy[::-1], dtype=np.uint8)
         self.update([0, 0, 0], 0)
 
     def space_mod(self, pos_xyz):
@@ -35,15 +35,19 @@ class ParticleSystem:
         self.pos_xyz -= np.array(velocity_xyz) * dt
         self.pos_xyz = self.space_mod(self.pos_xyz)
 
-        # project point on the plane [-0.5, 0.5],[-0.5, 0.5]
+        # project point on the plane XY
         pos_plan_xy = self.pos_xyz[:, 0:2] * self.focal/self.pos_xyz[:, 2:]
 
-        # plane to screen
-        pos_screen_xy = (pos_plan_xy + [0.5, 0.5]) * self.dim_xy
+        # plane XY to screen
+        lower_bounds_xy = self.bounds_xyz[0:2, 0]
+        plane_to_screen_factor = self.dim_xy/self.span_xyz[0, 0:2]
+        pos_screen_xy = (pos_plan_xy - lower_bounds_xy) * plane_to_screen_factor
         pos_screen_xy = pos_screen_xy.astype(np.int64)
 
         # keep only visible points
-        visible = np.array([-0.5 < x < 0.5 and -0.5 < y < 0.5 for x, y, in pos_plan_xy])
+        low_x, up_x = self.bounds_xyz[0, :]
+        low_y, up_y = self.bounds_xyz[1, :]
+        visible = np.array([low_x < x < up_x and low_y < y < up_x for x, y, in pos_plan_xy])
         pos_plan_xy = pos_plan_xy[visible]
         pos_screen_xy = pos_screen_xy[visible]
 
@@ -73,7 +77,7 @@ class ParticleSystem:
 
 
 if __name__ == '__main__':
-    ps = ParticleSystem([1000, 1000], 1000)
+    ps = ParticleSystem([500, 300], 1000)
     fps = 60
     velocity_xyz = [0, 0, 1]
     for k in range(200):

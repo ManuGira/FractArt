@@ -103,7 +103,7 @@ def generate_images_from_hits(data_folder, itinary, max_iter, fps, style=None, u
             julia_hits, julia_trap_magn, julia_trap_phase = julia_hits
 
         H, W = julia_hits.shape
-        pg = particles_generator.ParticleSystem([H, W], 1000)
+        pg = particles_generator.ParticleSystem([W, H], 1000)
 
     print(f"{k1-k0} hits matrices to paint")
     for k in range(k0, k1):
